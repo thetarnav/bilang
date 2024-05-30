@@ -10,8 +10,8 @@ Token_Kind :: enum u8 {
 	EOF,
 	Comment,       // # Comment
 	// Punctuators
-	Paren_Open,    // (
-	Paren_Close,   // )
+	Paren_L,       // (
+	Paren_R,       // )
 	// Operators
 	Eq,            // =
 	Add,           // +
@@ -21,7 +21,7 @@ Token_Kind :: enum u8 {
 	// Scalars
 	Num,           // 123, 123.456, 0.123, 0
 	// Identifiers
-	Name,          // abc_69
+	Ident,         // abc_69
 }
 
 Token :: struct {
@@ -125,8 +125,8 @@ next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, before_eof: b
 			}
 		}
 	// Punctuators
-	case '(': return make_token(t, .Paren_Open), true
-	case ')': return make_token(t, .Paren_Close), true
+	case '(': return make_token(t, .Paren_L), true
+	case ')': return make_token(t, .Paren_R), true
 	// Operators
 	case '=': return make_token(t, .Eq), true
 	case '+': return make_token(t, .Add), true
@@ -165,7 +165,7 @@ next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, before_eof: b
 				return make_token_go_back(t, .Num), true // int
 			}
 		}
-	// Keywords and Identifiers
+	// Identifiers
 	case 'a'..='z', 'A'..='Z', '_':
 		for {
 			switch next_char(t) {
@@ -173,7 +173,7 @@ next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, before_eof: b
 			}
 			break
 		}
-		return make_token_go_back(t, .Name), true
+		return make_token_go_back(t, .Ident), true
 	case:
 		return make_token(t, .Invalid), true
 	}
