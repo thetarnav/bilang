@@ -1,0 +1,22 @@
+# Ignore all extensionless files
+*
+!*.*
+!*/
+
+# generated files
+_*
+*.wasm
+*.o
+*.bin
+
+# Vscode config
+.vscode/settings.json
+
+node_modules
+dist
+/types
+
+.env
+
+# OLS config
+/ols.json
