@@ -217,7 +217,7 @@ parser_error_to_string :: proc(
 	switch e in parser_err {
 	case Allocator_Error:
 		switch e {
-		case .None:                 text = "Allocator_Error: None"
+		case .None:                 unreachable()
 		case .Out_Of_Memory:        text = "Allocator_Error: Out of memory"
 		case .Invalid_Pointer:      text = "Allocator_Error: Invalid pointer"
 		case .Invalid_Argument:     text = "Allocator_Error: Invalid argument"
