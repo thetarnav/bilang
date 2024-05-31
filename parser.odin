@@ -1,6 +1,5 @@
 package bilang
 
-import "core:fmt"
 import "core:mem"
 import "core:strconv"
 
@@ -62,6 +61,18 @@ Invalid_Number_Literal_Error :: struct {
 	token: Token,
 }
 
+@(require_results)
+parser_next_token_expect :: proc(
+	t: ^Tokenizer,
+	expected: Token_Kind,
+) -> (token: Token, err: Parse_Error) {
+	ok: bool
+	token, ok = next_token_expect(t, expected)
+	if !ok {
+		err = Unexpected_Token_Error{token}
+	}
+	return
+}
 
 @(require_results)
 parse_file :: proc (
@@ -70,10 +81,7 @@ parse_file :: proc (
 ) -> (res: []^Expr, err: Parse_Error) {
 
 	decls := make([dynamic]^Expr, 0, 16, allocator) or_return
-	defer {
-		res = decls[:]
-		shrink(&decls)
-	}
+	defer shrink(&decls)
 
 	t := make_tokenizer(file)
 	
@@ -85,39 +93,49 @@ parse_file :: proc (
 			continue
 		case .EOF:
 			return
-		case .Ident:
-		case .Num:
-		case .Paren_L:
-		case .Add:
-		case .Sub:
 		case:
-			err = Unexpected_Token_Error{token}
-			return
+			expr := parse_expr(&t, token, allocator) or_return
+			append(&decls, new_expr(expr, allocator) or_return) or_return
 		}
+
+		token = parser_next_token_expect(&t, .Eq) or_return
+
+		expr := parse_expr(&t, token, allocator) or_return
+		append(&decls, new_expr(expr, allocator) or_return) or_return
 	}
 
+	res = decls[:]
+
+	return
+}
+
+new_expr :: proc (
+	expr: Expr,
+	allocator: mem.Allocator,
+) -> (ptr: ^Expr, err: Allocator_Error) {
+	ptr  = new(Expr, allocator) or_return
+	ptr ^= expr
 	return
 }
 
 @(require_results)
 parse_expr :: proc (
 	t: ^Tokenizer,
-) -> (res: ^Expr, err: Parse_Error) {
-
-	token := next_token(t)
+	token: Token,
+	allocator: mem.Allocator,
+) -> (expr: Expr, err: Parse_Error) {
 
 	#partial switch token.kind {
-	case .Ident:
-		return parse_ident(t, token)
-	case .Num:
-		return parse_number(t, token)
-	case .Paren_L:
-		return parse_paren(t, token)
-	case .Add, .Sub:
-		return parse_unary(t, token)
+	case .Comment:   expr, err = parse_expr(t, next_token(t), allocator)
+	case .Ident:     expr      = parse_ident(t, token)
+	case .Num:       expr, err = parse_number(t, token)
+	case .Paren_L:   expr, err = parse_paren(t, token, allocator)
+	case .Add, .Sub: expr, err = parse_unary(t, token, allocator)
 	case:
-		return nil, Unexpected_Token_Error{token}
+		err = Unexpected_Token_Error{token}
 	}
+
+	return
 }
 
 parse_ident :: proc (
@@ -153,32 +171,33 @@ parse_number :: proc (
 parse_paren :: proc (
 	t: ^Tokenizer,
 	open: Token,
-) -> (res: ^Expr, err: Parse_Error) {
+	allocator: mem.Allocator,
+) -> (paren: Paren, err: Parse_Error) {
+	assert(open.kind == .Paren_L)
 	
-	expr, err := parse_expr(t)
-	if err != nil {
-		return nil, err
+	expr  := parse_expr(t, next_token(t), allocator) or_return
+	close := parser_next_token_expect(t, .Paren_R) or_return
+	paren  = Paren{
+		open,
+		new_expr(expr, allocator) or_return,
+		close,
 	}
 
-	close := next_token(t)
-	if close.kind != .Paren_R {
-		return nil, Unexpected_Token_Error{close}
-	}
-
-	paren := Paren{open, expr, close}
-	return &paren, nil
+	return
 }
 
 parse_unary :: proc (
 	t: ^Tokenizer,
 	op: Token,
-) -> (res: ^Expr, err: Parse_Error) {
+	allocator: mem.Allocator,
+) -> (unary: Unary, err: Parse_Error) {
+	assert(op.kind == .Add || op.kind == .Sub)
 	
-	expr, err := parse_expr(t)
-	if err != nil {
-		return nil, err
+	expr := parse_expr(t, next_token(t), allocator) or_return
+	unary = Unary{
+		op,
+		new_expr(expr, allocator) or_return,
 	}
 
-	unary := Unary{op, expr}
-	return &unary, nil
+	return
 }

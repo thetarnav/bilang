@@ -186,7 +186,7 @@ tokenizer_next :: next_token
 @(require_results)
 next_token_ignore_comments :: proc(t: ^Tokenizer) -> (token: Token) {
 	for {
-		token = tokenizer_next(t)
+		token = next_token(t)
 		if token.kind != .Comment do return token
 	}
 }
@@ -196,16 +196,14 @@ next_token_expect :: proc(
 	t: ^Tokenizer,
 	expected: Token_Kind,
 ) -> (token: Token, ok: bool) {
-	for {
-		token = tokenizer_next(t)
-		#partial switch token.kind {
-		case .Comment:
-			continue
-		case expected:
-			return token, true
-		case:
-			return token, false
-		}
+	token = next_token(t)
+	#partial switch token.kind {
+	case .Comment:
+		return next_token_expect(t, expected)
+	case expected:
+		return token, true
+	case:
+		return token, false
 	}
 }
 
