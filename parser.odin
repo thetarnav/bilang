@@ -90,6 +90,8 @@ parse_file :: proc (
 		token := next_token(&t)
 
 		#partial switch token.kind {
+		case .EOL:
+			continue
 		case .EOF:
 			return
 		case:
@@ -222,12 +224,12 @@ parser_error_to_string :: proc(
 		}
 	case Unexpected_Token_Error:
 		text, err = strings.concatenate({
-			"Unexpected token:\n",
+			"Unexpected token: ",
 			display_token_in_line(src, e.token),
 		})
 	case Invalid_Number_Literal_Error:
 		text, err = strings.concatenate({
-			"Invalid number literal:\n",
+			"Invalid number literal: ",
 			display_token_in_line(src, e.token),
 		})
 	}

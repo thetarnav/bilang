@@ -3,6 +3,7 @@ package bilang
 import "core:unicode/utf8"
 import "core:strings"
 import "core:mem"
+import "core:reflect"
 
 
 Token_Kind :: enum u8 {
@@ -222,6 +223,7 @@ display_token_in_line :: proc (
 ) -> (text: string, err: mem.Allocator_Error) #optional_allocator_error {
 
 	b := strings.builder_make_len_cap(0, 128, allocator) or_return
+	defer shrink(&b.buf)
 
 	line, col := token_line_col(src, token)
 
@@ -235,16 +237,20 @@ display_token_in_line :: proc (
 	}
 
 	/*
-	(1:10)
+	.Invalid "????" at 1:10
 	abc = 123 ???? 456
 	          ^^^^
-	*/	
+	*/
 
-	strings.write_string(&b, "(")
+	strings.write_string(&b, ".")
+	strings.write_string(&b, reflect.enum_string(token.kind))
+	strings.write_string(&b, " \"")
+	strings.write_string(&b, token_string(src, token))
+	strings.write_string(&b, "\" at ")
 	strings.write_int   (&b, line+1)
 	strings.write_string(&b, ":")
 	strings.write_int   (&b, col+1)
-	strings.write_string(&b, ")\n")
+	strings.write_string(&b, "\n")
 	strings.write_string(&b, src[start:end])
 	strings.write_rune  (&b, '\n')
 	for _ in 0..<col {
