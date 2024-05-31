@@ -195,17 +195,18 @@ next_token_expect :: proc(
 	}
 }
 
+/*
+The returned line and column are 0-based.
+*/
 @(require_results)
 token_line_col :: proc(
 	src: string,
 	token: Token,
 ) -> (line: int, col: int) {
-	line = 1
-	col  = 1
 	for ch in src[:token.pos] {
 		if ch == '\n' {
 			line += 1
-			col   = 1
+			col   = 0
 		} else {
 			col += 1
 		}
@@ -224,7 +225,7 @@ display_token_in_line :: proc (
 
 	line, col := token_line_col(src, token)
 
-	start := token.pos - col + 1
+	start := token.pos - col
 	end   := token.pos + token.len
 
 	// extend end to eol
@@ -240,13 +241,13 @@ display_token_in_line :: proc (
 	*/	
 
 	strings.write_string(&b, "(")
-	strings.write_int   (&b, line)
+	strings.write_int   (&b, line+1)
 	strings.write_string(&b, ":")
-	strings.write_int   (&b, col)
+	strings.write_int   (&b, col+1)
 	strings.write_string(&b, ")\n")
 	strings.write_string(&b, src[start:end])
 	strings.write_rune  (&b, '\n')
-	for _ in 0..<col-1 {
+	for _ in 0..<col {
 		strings.write_rune(&b, ' ')
 	}
 	for _ in 0..<token.len {
