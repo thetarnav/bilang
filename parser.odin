@@ -82,7 +82,10 @@ parse_file :: proc (
 ) -> (res: []^Expr, err: Parse_Error) {
 
 	decls := make([dynamic]^Expr, 0, 16, allocator) or_return
-	defer shrink(&decls)
+	defer {
+		res = decls[:]
+		shrink(&decls)
+	}
 
 	t := make_tokenizer(file)
 	
@@ -100,12 +103,10 @@ parse_file :: proc (
 		}
 
 		token = parser_next_token_expect(&t, .Eq) or_return
-
+		token = next_token(&t)
 		expr := parse_expr(&t, token, allocator) or_return
 		append(&decls, new_expr(expr, allocator) or_return) or_return
 	}
-
-	res = decls[:]
 
 	return
 }
