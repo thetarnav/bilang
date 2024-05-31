@@ -10,5 +10,8 @@ a - b = 10 * (5 + 15) / 2
 
 
 main :: proc () {
-    fmt.println("Hello, World!")
+	decls, err := parse_file(language_input)
+
+	fmt.println("decls = ", decls)
+	fmt.println("err   = ", err)
 }

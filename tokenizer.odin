@@ -63,7 +63,7 @@ token_string :: #force_inline proc "contextless" (src: string, t: Token) -> (tex
 	return src[t.pos:t.pos + t.len]
 }
 
-next_char :: proc "contextless" (t: ^Tokenizer) -> (char: rune, before_eof: bool) #optional_ok #no_bounds_check {
+next_char :: proc "contextless" (t: ^Tokenizer) -> (char: rune, in_file: bool) #optional_ok #no_bounds_check {
 	if t.pos_read >= len(t.src) {
 		t.char = 0
 		t.pos_read = len(t.src)+1
@@ -78,33 +78,36 @@ next_char :: proc "contextless" (t: ^Tokenizer) -> (char: rune, before_eof: bool
 	return ch, true
 }
 
+make_token :: proc "contextless" (t: ^Tokenizer, kind: Token_Kind) -> (token: Token) {
+	token.kind  = kind
+	token.pos   = t.pos_write
+	token.len   = t.pos_read - t.pos_write
+	token.line  = t.line
+	token.col   = t.pos_write - t.line_pos
+	t.pos_write = t.pos_read
+	next_char(t)
+	return
+}
+make_token_go_back :: proc "contextless" (t: ^Tokenizer, kind: Token_Kind) -> (token: Token) {
+	token.kind  = kind
+	token.pos   = t.pos_write
+	token.len   = t.pos_read - t.pos_write - t.char_width
+	token.line  = t.line
+	token.col   = t.pos_write - t.line_pos
+	t.pos_write = t.pos_read - t.char_width
+	return
+}
+
 @(require_results)
-next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, before_eof: bool) #optional_ok #no_bounds_check {
+next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, in_file: bool) #optional_ok #no_bounds_check {
 
-	make_token :: proc "contextless" (t: ^Tokenizer, kind: Token_Kind) -> (token: Token) #no_bounds_check {
-		token.kind  = kind
-		token.pos   = t.pos_write
-		token.len   = t.pos_read - t.pos_write
-		token.line  = t.line
-		token.col   = t.pos_write - t.line_pos
-		t.pos_write = t.pos_read
-		next_char(t)
-		return
+	if t.pos_read == len(t.src) {
+		return make_token(t, .EOF), true
 	}
-	make_token_go_back :: proc "contextless" (t: ^Tokenizer, kind: Token_Kind) -> (token: Token) #no_bounds_check {
-		token.kind  = kind
-		token.pos   = t.pos_write
-		token.len   = t.pos_read - t.pos_write - t.char_width
-		token.line  = t.line
-		token.col   = t.pos_write - t.line_pos
-		t.pos_write = t.pos_read - t.char_width
-		return
-	}
-
 	if t.pos_read > len(t.src) {
 		return make_token(t, .EOF), false
 	}
-	before_eof = true
+	in_file = true
 
 	switch t.char {
 	// Whitespace and comma
@@ -181,6 +184,32 @@ next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, before_eof: b
 tokenizer_next :: next_token
 
 @(require_results)
+next_token_ignore_comments :: proc(t: ^Tokenizer) -> (token: Token) {
+	for {
+		token = tokenizer_next(t)
+		if token.kind != .Comment do return token
+	}
+}
+
+@(require_results)
+next_token_expect :: proc(
+	t: ^Tokenizer,
+	expected: Token_Kind,
+) -> (token: Token, ok: bool) {
+	for {
+		token = tokenizer_next(t)
+		#partial switch token.kind {
+		case .Comment:
+			continue
+		case expected:
+			return token, true
+		case:
+			return token, false
+		}
+	}
+}
+
+@(require_results)
 display_token_in_line :: proc (
 	src:   string,
 	token: Token,
@@ -192,11 +221,10 @@ display_token_in_line :: proc (
 	start := token.pos - token.col
 	end   := token.pos + token.len
 
-	for i := 0; i < 40; i += 1 {
-		if end < len(src) {
-			if src[end] == '\n' do break
-			end += 1
-		}
+	// extend end to eol
+	for i := 0; i < 40 && end < len(src); i += 1 {
+		if src[end] == '\n' do break
+		end += 1
 	}
 
 	/*
@@ -216,6 +244,7 @@ display_token_in_line :: proc (
 	for _ in 0..<token.len {
 		strings.write_rune(&b, '^')
 	}
+
 	text = strings.to_string(b)
 
 	return
