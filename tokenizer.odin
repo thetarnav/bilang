@@ -252,6 +252,7 @@ display_token_in_line :: proc (
 	for _ in 0..<token.len {
 		strings.write_rune(&b, '^')
 	}
+	strings.write_rune(&b, '\n')
 
 	text = strings.to_string(b)
 

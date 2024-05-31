@@ -2,6 +2,7 @@ package bilang
 
 import "core:mem"
 import "core:strconv"
+import "core:strings"
 
 
 Expr :: union {
@@ -194,6 +195,41 @@ parse_unary :: proc (
 	unary = Unary{
 		op,
 		new_expr(expr, allocator) or_return,
+	}
+
+	return
+}
+
+/*
+Return a pretty string representation of a parser error.
+*/
+@(require_results)
+parser_error_to_string :: proc(
+	src: string,
+	parser_err: Parse_Error,
+	allocator := context.allocator,
+) -> (text: string, err: mem.Allocator_Error) #optional_allocator_error {
+	context.allocator = allocator
+
+	switch e in parser_err {
+	case Allocator_Error:
+		switch e {
+		case .None:                 text = "Allocator_Error: None"
+		case .Out_Of_Memory:        text = "Allocator_Error: Out of memory"
+		case .Invalid_Pointer:      text = "Allocator_Error: Invalid pointer"
+		case .Invalid_Argument:     text = "Allocator_Error: Invalid argument"
+		case .Mode_Not_Implemented: text = "Allocator_Error: Mode not implemented"
+		}
+	case Unexpected_Token_Error:
+		text, err = strings.concatenate({
+			"Unexpected token:\n",
+			display_token_in_line(src, e.token),
+		})
+	case Invalid_Number_Literal_Error:
+		text, err = strings.concatenate({
+			"Invalid number literal:\n",
+			display_token_in_line(src, e.token),
+		})
 	}
 
 	return
