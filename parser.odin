@@ -89,8 +89,6 @@ parse_file :: proc (
 		token := next_token(&t)
 
 		#partial switch token.kind {
-		case .Comment:
-			continue
 		case .EOF:
 			return
 		case:
@@ -126,7 +124,6 @@ parse_expr :: proc (
 ) -> (expr: Expr, err: Parse_Error) {
 
 	#partial switch token.kind {
-	case .Comment:   expr, err = parse_expr(t, next_token(t), allocator)
 	case .Ident:     expr      = parse_ident(t, token)
 	case .Num:       expr, err = parse_number(t, token)
 	case .Paren_L:   expr, err = parse_paren(t, token, allocator)

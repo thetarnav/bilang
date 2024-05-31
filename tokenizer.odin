@@ -8,7 +8,8 @@ import "core:mem"
 Token_Kind :: enum u8 {
 	Invalid,
 	EOF,
-	Comment,       // # Comment
+	EOL,           // \n
+	// Comment,       // # Comment
 	// Punctuators
 	Paren_L,       // (
 	Paren_R,       // )
@@ -26,18 +27,14 @@ Token_Kind :: enum u8 {
 
 Token :: struct {
 	kind: Token_Kind,
-	pos : int, // offset to Tokenizer.src, 0-based
+	pos : int, // offset to Tokenizer.src
 	len : int,
-	line: int, // 1-based
-	col : int, // 1-based
 }
 
 Tokenizer :: struct {
 	src       : string,
 	pos_read  : int,
 	pos_write : int,
-	line      : int,
-	line_pos  : int,
 	char      : rune,
 	char_width: int,
 }
@@ -45,7 +42,6 @@ Tokenizer :: struct {
 
 tokenizer_init :: proc "contextless" (t: ^Tokenizer, src: string) {
 	t.src = src
-	t.line = 1
 	if next_char(t) == utf8.RUNE_BOM {
 		t.pos_write = t.pos_read
 		next_char(t)
@@ -73,7 +69,7 @@ next_char :: proc "contextless" (t: ^Tokenizer) -> (char: rune, in_file: bool) #
 
 	ch, width := utf8.decode_rune_in_string(t.src[t.pos_read:])
 	t.char = ch
-	t.pos_read += width
+	t.pos_read  += width
 	t.char_width = width
 	return ch, true
 }
@@ -82,8 +78,6 @@ make_token :: proc "contextless" (t: ^Tokenizer, kind: Token_Kind) -> (token: To
 	token.kind  = kind
 	token.pos   = t.pos_write
 	token.len   = t.pos_read - t.pos_write
-	token.line  = t.line
-	token.col   = t.pos_write - t.line_pos
 	t.pos_write = t.pos_read
 	next_char(t)
 	return
@@ -92,8 +86,6 @@ make_token_go_back :: proc "contextless" (t: ^Tokenizer, kind: Token_Kind) -> (t
 	token.kind  = kind
 	token.pos   = t.pos_write
 	token.len   = t.pos_read - t.pos_write - t.char_width
-	token.line  = t.line
-	token.col   = t.pos_write - t.line_pos
 	t.pos_write = t.pos_read - t.char_width
 	return
 }
@@ -101,9 +93,6 @@ make_token_go_back :: proc "contextless" (t: ^Tokenizer, kind: Token_Kind) -> (t
 @(require_results)
 next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, in_file: bool) #optional_ok #no_bounds_check {
 
-	if t.pos_read == len(t.src) {
-		return make_token(t, .EOF), true
-	}
 	if t.pos_read > len(t.src) {
 		return make_token(t, .EOF), false
 	}
@@ -112,9 +101,8 @@ next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, in_file: bool
 	switch t.char {
 	// Whitespace and comma
 	case '\n':
-		t.line += 1
-		t.line_pos = t.pos_read
-		fallthrough
+		t.pos_write = t.pos_read - 1
+		return make_token(t, .EOL), true
 	case ',', ' ', '\t', '\r':
 		t.pos_write = t.pos_read
 		next_char(t)
@@ -183,13 +171,13 @@ next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, in_file: bool
 }
 tokenizer_next :: next_token
 
-@(require_results)
-next_token_ignore_comments :: proc(t: ^Tokenizer) -> (token: Token) {
-	for {
-		token = next_token(t)
-		if token.kind != .Comment do return token
-	}
-}
+// @(require_results)
+// next_token_ignore_comments :: proc(t: ^Tokenizer) -> (token: Token) {
+// 	for {
+// 		token = next_token(t)
+// 		if token.kind != .Comment do return token
+// 	}
+// }
 
 @(require_results)
 next_token_expect :: proc(
@@ -198,13 +186,31 @@ next_token_expect :: proc(
 ) -> (token: Token, ok: bool) {
 	token = next_token(t)
 	#partial switch token.kind {
-	case .Comment:
-		return next_token_expect(t, expected)
+	// case .Comment:
+	// 	return next_token_expect(t, expected)
 	case expected:
 		return token, true
 	case:
 		return token, false
 	}
+}
+
+@(require_results)
+token_line_col :: proc(
+	src: string,
+	token: Token,
+) -> (line: int, col: int) {
+	line = 1
+	col  = 1
+	for ch in src[:token.pos] {
+		if ch == '\n' {
+			line += 1
+			col   = 1
+		} else {
+			col += 1
+		}
+	}
+	return
 }
 
 @(require_results)
@@ -216,7 +222,9 @@ display_token_in_line :: proc (
 
 	b := strings.builder_make_len_cap(0, 128, allocator) or_return
 
-	start := token.pos - token.col
+	line, col := token_line_col(src, token)
+
+	start := token.pos - col + 1
 	end   := token.pos + token.len
 
 	// extend end to eol
@@ -226,17 +234,19 @@ display_token_in_line :: proc (
 	}
 
 	/*
-	1:10 abc = 123 ???? 456
-	               ^^^^
+	(1:10)
+	abc = 123 ???? 456
+	          ^^^^
 	*/	
 
-	strings.write_int   (&b, token.line)
+	strings.write_string(&b, "(")
+	strings.write_int   (&b, line)
 	strings.write_string(&b, ":")
-	strings.write_int   (&b, token.col)
-	strings.write_string(&b, " ")
+	strings.write_int   (&b, col)
+	strings.write_string(&b, ")\n")
 	strings.write_string(&b, src[start:end])
 	strings.write_rune  (&b, '\n')
-	for _ in 0..<token.col {
+	for _ in 0..<col-1 {
 		strings.write_rune(&b, ' ')
 	}
 	for _ in 0..<token.len {

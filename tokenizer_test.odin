@@ -103,25 +103,27 @@ expected_list := []Expect_Tokens_Case {
 	},
 	{	"Comment with int after LF",
 		"# foo\n123",
-		{{.Num, "123"}},
+		{{.EOL, "\n"}, {.Num, "123"}},
 	},
 	{	"Comment with int after CRLF",
 		"# foo\r\n123",
-		{{.Num, "123"}},
+		{{.EOL, "\n"}, {.Num, "123"}},
 	},
 	/*
 	Code Snippets
 	*/
 	{	"Query Example",
 `
-a     = -69.5
+a     = -69.5 # a is -69.5
 a + b = c + 89 * - 2
 a - b = 10 * (5 + 15) / 2
 `,     {
+			{.EOL,     "\n"},
 			{.Ident,   "a"},
 			{.Eq,      "="},
 			{.Sub,     "-"},
 			{.Num,     "69.5"},
+			{.EOL,     "\n"},
 			{.Ident,   "a"},
 			{.Add,     "+"},
 			{.Ident,   "b"},
@@ -132,6 +134,7 @@ a - b = 10 * (5 + 15) / 2
 			{.Mul,     "*"},
 			{.Sub,     "-"},
 			{.Num,     "2"},
+			{.EOL,     "\n"},
 			{.Ident,   "a"},
 			{.Sub,     "-"},
 			{.Ident,   "b"},
@@ -145,6 +148,7 @@ a - b = 10 * (5 + 15) / 2
 			{.Paren_R, ")"},
 			{.Div,     "/"},
 			{.Num,     "2"},
+			{.EOL,     "\n"},
 		},
 	},
 }
@@ -179,11 +183,13 @@ test_tokenizer_cases :: proc(t: ^test.T) {
 		)
 
 		for token, i in tokens {
+			expected := test_case.expected[i]
+			text := token_string(test_case.src, token)
 			token_good := test.expectf(t,
-				token_string(test_case.src, token) == test_case.expected[i].text &&
-				token.kind == test_case.expected[i].kind,
-				"\n\e[0;32m%q\e[0m:\e[0;31m\n\texpected tokens[%d] to be %v, got %v\n\e[0m",
-				test_case.name, i, test_case.expected[i], token,
+				text == expected.text &&
+				token.kind == expected.kind,
+				"\n\e[0;32m%q\e[0m:\e[0;31m\nexpected tokens[%d] to be %s `%s`, got %s `%s`\n\e[0m%s\n",
+				test_case.name, i, expected.kind, expected.text, token.kind, text, display_token_in_line(test_case.src, token)
 			)
 			good = good && token_good
 		}
