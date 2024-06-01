@@ -125,13 +125,19 @@ parse_file :: proc (
 			append(&decls, expr) or_return
 		}
 
-		parser_next_token_expect(&p, .Eq) or_return
+		if p.token.kind != .Eq {
+			err = Unexpected_Token_Error{p.token}
+			return
+		}
 
 		parser_next_token(&p) or_return
 		expr := parse_expr(&p) or_return
 		append(&decls, expr) or_return
 
-		parser_next_token_expect(&p, .EOL) or_return
+		if p.token.kind != .EOL {
+			err = Unexpected_Token_Error{p.token}
+			return
+		}
 	}
 
 	return
@@ -153,7 +159,6 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) {
 		return expr, Unexpected_Token_Error{p.token}
 	}
 
-	parser_next_token(p) or_return
 	#partial switch p.token.kind {
 	case .Add, .Sub, .Mul, .Div:
 		binary := new(Binary, p.allocator) or_return
@@ -175,6 +180,8 @@ parse_ident :: proc (p: ^Parser) -> (ident: ^Ident, err: Parse_Error) {
 	ident.name = token_string(p.src, p.token)
 	ident.token = p.token
 
+	parser_next_token(p) or_return
+
 	return
 }
 
@@ -192,6 +199,8 @@ parse_number :: proc (p: ^Parser) -> (number: ^Number, err: Parse_Error) {
 	number.value = value
 	number.token = p.token
 
+	parser_next_token(p) or_return
+
 	return
 }
 
@@ -205,6 +214,8 @@ parse_paren :: proc (p: ^Parser) -> (paren: ^Paren, err: Parse_Error) {
 	parser_next_token(p) or_return
 	paren.expr = parse_expr(p) or_return
 	paren.close = parser_next_token_expect(p, .Paren_R) or_return
+
+	parser_next_token(p) or_return
 
 	return
 }
