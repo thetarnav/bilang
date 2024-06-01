@@ -94,6 +94,16 @@ parser_next_token_expect :: proc(
 	return
 }
 
+parser_curr_token_expect :: proc(
+	p: ^Parser,
+	expected: Token_Kind,
+) -> (err: Parse_Error) {
+	if p.token.kind != expected {
+		err = Unexpected_Token_Error{p.token}
+	}
+	return
+}
+
 @(require_results)
 parse_file :: proc (
 	src: string,
@@ -125,19 +135,13 @@ parse_file :: proc (
 			append(&decls, expr) or_return
 		}
 
-		if p.token.kind != .Eq {
-			err = Unexpected_Token_Error{p.token}
-			return
-		}
+		parser_curr_token_expect(&p, .Eq) or_return
 
 		parser_next_token(&p) or_return
 		expr := parse_expr(&p) or_return
 		append(&decls, expr) or_return
 
-		if p.token.kind != .EOL {
-			err = Unexpected_Token_Error{p.token}
-			return
-		}
+		parser_curr_token_expect(&p, .EOL) or_return
 	}
 
 	return
@@ -213,7 +217,8 @@ parse_paren :: proc (p: ^Parser) -> (paren: ^Paren, err: Parse_Error) {
 	paren.open = p.token
 	parser_next_token(p) or_return
 	paren.expr = parse_expr(p) or_return
-	paren.close = parser_next_token_expect(p, .Paren_R) or_return
+	parser_curr_token_expect(p, .Paren_R) or_return
+	paren.close = p.token
 
 	parser_next_token(p) or_return
 
