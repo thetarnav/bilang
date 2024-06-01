@@ -63,8 +63,7 @@ token_string :: #force_inline proc "contextless" (src: string, t: Token) -> (tex
 next_char :: proc "contextless" (t: ^Tokenizer) -> (char: rune, in_file: bool) #optional_ok #no_bounds_check {
 	if t.pos_read >= len(t.src) {
 		t.char = 0
-		t.pos_read = len(t.src)+1
-		t.char_width = 1
+		t.char_width = 0
 		return 0, false
 	}
 
@@ -94,7 +93,7 @@ make_token_go_back :: proc "contextless" (t: ^Tokenizer, kind: Token_Kind) -> (t
 @(require_results)
 next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, in_file: bool) #optional_ok #no_bounds_check {
 
-	if t.pos_read > len(t.src) {
+	if t.pos_read >= len(t.src) && t.char == 0 {
 		return make_token(t, .EOF), false
 	}
 	in_file = true

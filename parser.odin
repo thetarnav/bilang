@@ -69,27 +69,18 @@ Parser :: struct {
 	allocator: mem.Allocator,
 }
 
-parser_next_token :: proc(
-	p: ^Parser,
-) -> (token: Token, err: Parse_Error) {
-	ok: bool
-	token, ok = next_token(&p.t)
-	p.token = token
-	if !ok {
-		err = Unexpected_Token_Error{token}
-	}
-	return
+parser_next_token :: proc(p: ^Parser) {
+	p.token = next_token(&p.t)
 }
 
 parser_next_token_expect :: proc(
 	p: ^Parser,
 	expected: Token_Kind,
-) -> (token: Token, err: Parse_Error) {
+) -> (err: Parse_Error) {
 	ok: bool
-	token, ok = next_token_expect(&p.t, expected)
-	p.token = token
+	p.token, ok = next_token_expect(&p.t, expected)
 	if !ok {
-		err = Unexpected_Token_Error{token}
+		err = Unexpected_Token_Error{p.token}
 	}
 	return
 }
@@ -111,10 +102,7 @@ parse_file :: proc (
 ) -> (res: []Expr, err: Parse_Error) {
 
 	decls := make([dynamic]Expr, 0, 16, allocator) or_return
-	defer {
-		res = decls[:]
-		shrink(&decls)
-	}
+	defer shrink(&decls)
 
 	p: Parser = {
 		src       = src,
@@ -122,14 +110,14 @@ parse_file :: proc (
 		allocator = allocator,
 	}
 	
-	for {
-		parser_next_token(&p) or_return
+	loop: for {
+		parser_next_token(&p)
 
 		#partial switch p.token.kind {
 		case .EOL:
 			continue
 		case .EOF:
-			return
+			break loop
 		case:
 			expr := parse_expr(&p) or_return
 			append(&decls, expr) or_return
@@ -137,13 +125,14 @@ parse_file :: proc (
 
 		parser_curr_token_expect(&p, .Eq) or_return
 
-		parser_next_token(&p) or_return
+		parser_next_token(&p)
 		expr := parse_expr(&p) or_return
 		append(&decls, expr) or_return
 
 		parser_curr_token_expect(&p, .EOL) or_return
 	}
 
+	res = decls[:]
 	return
 }
 
@@ -168,7 +157,7 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) {
 		binary := new(Binary, p.allocator) or_return
 		binary.op  = p.token
 		binary.lhs = expr
-		parser_next_token(p) or_return
+		parser_next_token(p)
 		binary.rhs = parse_expr(p) or_return
 		expr = binary
 	}
@@ -184,7 +173,7 @@ parse_ident :: proc (p: ^Parser) -> (ident: ^Ident, err: Parse_Error) {
 	ident.name = token_string(p.src, p.token)
 	ident.token = p.token
 
-	parser_next_token(p) or_return
+	parser_next_token(p)
 
 	return
 }
@@ -203,7 +192,7 @@ parse_number :: proc (p: ^Parser) -> (number: ^Number, err: Parse_Error) {
 	number.value = value
 	number.token = p.token
 
-	parser_next_token(p) or_return
+	parser_next_token(p)
 
 	return
 }
@@ -215,12 +204,12 @@ parse_paren :: proc (p: ^Parser) -> (paren: ^Paren, err: Parse_Error) {
 	paren = new(Paren, p.allocator) or_return
 
 	paren.open = p.token
-	parser_next_token(p) or_return
+	parser_next_token(p)
 	paren.expr = parse_expr(p) or_return
 	parser_curr_token_expect(p, .Paren_R) or_return
 	paren.close = p.token
 
-	parser_next_token(p) or_return
+	parser_next_token(p)
 
 	return
 }
@@ -232,7 +221,7 @@ parse_unary :: proc (p: ^Parser) -> (unary: ^Unary, err: Parse_Error) {
 	unary = new(Unary, p.allocator) or_return
 
 	unary.op = p.token
-	parser_next_token(p) or_return
+	parser_next_token(p)
 	unary.expr = parse_expr(p) or_return
 
 	return
