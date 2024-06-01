@@ -6,17 +6,17 @@ import "core:strings"
 
 
 Expr :: union {
-	Ident,
-	Number,
-	Unary,
-	Binary,
-	Paren,
+	^Ident,
+	^Number,
+	^Unary,
+	^Binary,
+	^Paren,
 }
 
 Assign :: struct {
-	lhs: ^Expr,
-	op:  Token,
-	rhs: ^Expr,
+	lhs: Expr,
+	op : Token,
+	rhs: Expr,
 }
 
 Ident :: struct {
@@ -31,18 +31,18 @@ Number :: struct {
 
 Unary :: struct {
 	op:   Token,
-	expr: ^Expr,
+	expr: Expr,
 }
 
 Binary :: struct {
-	left : ^Expr,
-	op   : Token,
-	right: ^Expr,
+	lhs: Expr,
+	op : Token,
+	rhs: Expr,
 }
 
 Paren :: struct {
 	open : Token,
-	expr : ^Expr,
+	expr : Expr,
 	close: Token,
 }
 
@@ -62,13 +62,32 @@ Invalid_Number_Literal_Error :: struct {
 	token: Token,
 }
 
-@(require_results)
+Parser :: struct {
+	src:       string,
+	t:         Tokenizer,
+	token:     Token,
+	allocator: mem.Allocator,
+}
+
+parser_next_token :: proc(
+	p: ^Parser,
+) -> (token: Token, err: Parse_Error) {
+	ok: bool
+	token, ok = next_token(&p.t)
+	p.token = token
+	if !ok {
+		err = Unexpected_Token_Error{token}
+	}
+	return
+}
+
 parser_next_token_expect :: proc(
-	t: ^Tokenizer,
+	p: ^Parser,
 	expected: Token_Kind,
 ) -> (token: Token, err: Parse_Error) {
 	ok: bool
-	token, ok = next_token_expect(t, expected)
+	token, ok = next_token_expect(&p.t, expected)
+	p.token = token
 	if !ok {
 		err = Unexpected_Token_Error{token}
 	}
@@ -77,128 +96,128 @@ parser_next_token_expect :: proc(
 
 @(require_results)
 parse_file :: proc (
-	file: string,
+	src: string,
 	allocator := context.allocator,
-) -> (res: []^Expr, err: Parse_Error) {
+) -> (res: []Expr, err: Parse_Error) {
 
-	decls := make([dynamic]^Expr, 0, 16, allocator) or_return
+	decls := make([dynamic]Expr, 0, 16, allocator) or_return
 	defer {
 		res = decls[:]
 		shrink(&decls)
 	}
 
-	t := make_tokenizer(file)
+	p: Parser = {
+		src       = src,
+		t         = make_tokenizer(src),
+		allocator = allocator,
+	}
 	
 	for {
-		token := next_token(&t)
+		parser_next_token(&p) or_return
 
-		#partial switch token.kind {
+		#partial switch p.token.kind {
 		case .EOL:
 			continue
 		case .EOF:
 			return
 		case:
-			expr := parse_expr(&t, token, allocator) or_return
-			append(&decls, new_expr(expr, allocator) or_return) or_return
+			expr := parse_expr(&p) or_return
+			append(&decls, expr) or_return
 		}
 
-		token = parser_next_token_expect(&t, .Eq) or_return
-		token = next_token(&t)
-		expr := parse_expr(&t, token, allocator) or_return
-		append(&decls, new_expr(expr, allocator) or_return) or_return
+		parser_next_token_expect(&p, .Eq) or_return
+
+		parser_next_token(&p) or_return
+		expr := parse_expr(&p) or_return
+		append(&decls, expr) or_return
+
+		parser_next_token_expect(&p, .EOL) or_return
 	}
 
-	return
-}
-
-new_expr :: proc (
-	expr: Expr,
-	allocator: mem.Allocator,
-) -> (ptr: ^Expr, err: Allocator_Error) {
-	ptr  = new(Expr, allocator) or_return
-	ptr ^= expr
 	return
 }
 
 @(require_results)
-parse_expr :: proc (
-	t: ^Tokenizer,
-	token: Token,
-	allocator: mem.Allocator,
-) -> (expr: Expr, err: Parse_Error) {
+parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) {
 
-	#partial switch token.kind {
-	case .Ident:     expr      = parse_ident(t, token)
-	case .Num:       expr, err = parse_number(t, token)
-	case .Paren_L:   expr, err = parse_paren(t, token, allocator)
-	case .Add, .Sub: expr, err = parse_unary(t, token, allocator)
+	/*
+	-a * b + c
+	*/
+
+	#partial switch p.token.kind {
+	case .Ident:     expr = parse_ident(p)  or_return
+	case .Num:       expr = parse_number(p) or_return
+	case .Paren_L:   expr = parse_paren(p)  or_return
+	case .Add, .Sub: expr = parse_unary(p)  or_return
 	case:
-		err = Unexpected_Token_Error{token}
+		return expr, Unexpected_Token_Error{p.token}
+	}
+
+	parser_next_token(p) or_return
+	#partial switch p.token.kind {
+	case .Add, .Sub, .Mul, .Div:
+		binary := new(Binary, p.allocator) or_return
+		binary.op  = p.token
+		binary.lhs = expr
+		parser_next_token(p) or_return
+		binary.rhs = parse_expr(p) or_return
+		expr = binary
 	}
 
 	return
 }
 
-parse_ident :: proc (
-	t: ^Tokenizer,
-	token: Token,
-) -> (ident: Ident) {
-	assert(token.kind == .Ident)
-	
-	ident.name = token_string(t.src, token)
-	ident.token = token
+@(require_results)
+parse_ident :: proc (p: ^Parser) -> (ident: ^Ident, err: Parse_Error) {
+	assert(p.token.kind == .Ident)
+
+	ident = new(Ident, p.allocator) or_return
+	ident.name = token_string(p.src, p.token)
+	ident.token = p.token
 
 	return
 }
 
-parse_number :: proc (
-	t: ^Tokenizer,
-	token: Token,
-) -> (number: Number, err: Parse_Error) {
-	assert(token.kind == .Num)
+@(require_results)
+parse_number :: proc (p: ^Parser) -> (number: ^Number, err: Parse_Error) {
+	assert(p.token.kind == .Num)
+
+	number = new(Number, p.allocator) or_return
 	
-	value, ok := strconv.parse_f32(token_string(t.src, token))
+	value, ok := strconv.parse_f32(token_string(p.src, p.token))
 	if !ok {
-		err = Invalid_Number_Literal_Error{token}
-		return
+		err = Invalid_Number_Literal_Error{p.token}
 	}
 
 	number.value = value
-	number.token = token
+	number.token = p.token
 
 	return
 }
 
-parse_paren :: proc (
-	t: ^Tokenizer,
-	open: Token,
-	allocator: mem.Allocator,
-) -> (paren: Paren, err: Parse_Error) {
-	assert(open.kind == .Paren_L)
-	
-	expr  := parse_expr(t, next_token(t), allocator) or_return
-	close := parser_next_token_expect(t, .Paren_R) or_return
-	paren  = Paren{
-		open,
-		new_expr(expr, allocator) or_return,
-		close,
-	}
+@(require_results)
+parse_paren :: proc (p: ^Parser) -> (paren: ^Paren, err: Parse_Error) {
+	assert(p.token.kind == .Paren_L)
+
+	paren = new(Paren, p.allocator) or_return
+
+	paren.open = p.token
+	parser_next_token(p) or_return
+	paren.expr = parse_expr(p) or_return
+	paren.close = parser_next_token_expect(p, .Paren_R) or_return
 
 	return
 }
 
-parse_unary :: proc (
-	t: ^Tokenizer,
-	op: Token,
-	allocator: mem.Allocator,
-) -> (unary: Unary, err: Parse_Error) {
-	assert(op.kind == .Add || op.kind == .Sub)
-	
-	expr := parse_expr(t, next_token(t), allocator) or_return
-	unary = Unary{
-		op,
-		new_expr(expr, allocator) or_return,
-	}
+@(require_results)
+parse_unary :: proc (p: ^Parser) -> (unary: ^Unary, err: Parse_Error) {
+	assert(p.token.kind == .Add || p.token.kind == .Sub)
+
+	unary = new(Unary, p.allocator) or_return
+
+	unary.op = p.token
+	parser_next_token(p) or_return
+	unary.expr = parse_expr(p) or_return
 
 	return
 }
