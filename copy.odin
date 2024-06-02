@@ -1,5 +1,6 @@
 package bilang
 
+
 copy_decl :: proc (decl: Decl, allocator := context.allocator) -> (new_decl: ^Decl)
 {
 	new_decl = new(Decl, allocator)
@@ -14,10 +15,10 @@ copy_decl :: proc (decl: Decl, allocator := context.allocator) -> (new_decl: ^De
 copy_expr :: proc (expr: Expr, allocator := context.allocator) -> (new_expr: Expr)
 {
 	switch v in expr {
-		case ^Ident:  new_expr = copy_ident (v^, allocator)
-		case ^Number: new_expr = copy_number(v^, allocator)
-		case ^Unary:  new_expr = copy_unary (v^, allocator)
-		case ^Binary: new_expr = copy_binary(v^, allocator)
+	case ^Ident:  new_expr = copy_ident (v^, allocator)
+	case ^Number: new_expr = copy_number(v^, allocator)
+	case ^Unary:  new_expr = copy_unary (v^, allocator)
+	case ^Binary: new_expr = copy_binary(v^, allocator)
 	}
 	return
 }
