@@ -13,9 +13,7 @@ main :: proc ()
 {
 	decls, err := parse_file(language_input)
 
-	for decl in decls {
-		print_assign(decl)
-	}
+	print_decls(decls)
 
 	if err != nil {
 		fmt.print(parser_error_to_string(language_input, err))
