@@ -28,7 +28,12 @@ print_binary :: proc (binary: ^Binary)
 	fmt.print("\e[38;5;240m(\e[0m")
 
 	fmt.print("\e[0;36m")
-	fmt.print(binary.op)
+	switch binary.op {
+	case .Add: fmt.print("+")
+	case .Sub: fmt.print("-")
+	case .Mul: fmt.print("*")
+	case .Div: fmt.print("/")
+	}
 	fmt.print("\e[0m")
 
 	fmt.print(" ")
@@ -43,7 +48,10 @@ print_unary :: proc (unary: ^Unary)
 	fmt.print("\e[38;5;240m(\e[0m")
 	
 	fmt.print("\e[0;36m")
-	fmt.print(unary.op)
+	switch unary.op {
+	case .Neg: fmt.print("-")
+	case .Pos: fmt.print("+")
+	}
 	fmt.print("\e[0m")
 
 	fmt.print(" ")
