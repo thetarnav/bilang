@@ -1,6 +1,7 @@
 package bilang
 
 
+@(require_results)
 copy_decl :: proc (decl: Decl, allocator := context.allocator) -> (new_decl: ^Decl)
 {
 	new_decl = new(Decl, allocator)
@@ -12,6 +13,7 @@ copy_decl :: proc (decl: Decl, allocator := context.allocator) -> (new_decl: ^De
 	return
 }
 
+@(require_results)
 copy_expr :: proc (expr: Expr, allocator := context.allocator) -> (new_expr: Expr)
 {
 	switch v in expr {
@@ -23,6 +25,7 @@ copy_expr :: proc (expr: Expr, allocator := context.allocator) -> (new_expr: Exp
 	return
 }
 
+@(require_results)
 copy_ident :: proc (ident: Ident, allocator := context.allocator) -> (new_ident: ^Ident)
 {
 	new_ident = new(Ident, allocator)
@@ -30,6 +33,7 @@ copy_ident :: proc (ident: Ident, allocator := context.allocator) -> (new_ident:
 	return
 }
 
+@(require_results)
 copy_number :: proc (number: Number, allocator := context.allocator) -> (new_number: ^Number)
 {
 	new_number = new(Number, allocator)
@@ -37,6 +41,7 @@ copy_number :: proc (number: Number, allocator := context.allocator) -> (new_num
 	return
 }
 
+@(require_results)
 copy_unary :: proc (unary: Unary, allocator := context.allocator) -> (new_unary: ^Unary)
 {
 	new_unary = new(Unary, allocator)
@@ -47,6 +52,7 @@ copy_unary :: proc (unary: Unary, allocator := context.allocator) -> (new_unary:
 	return
 }
 
+@(require_results)
 copy_binary :: proc (binary: Binary, allocator := context.allocator) -> (new_binary: ^Binary)
 {
 	new_binary = new(Binary, allocator)
