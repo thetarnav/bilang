@@ -74,6 +74,18 @@ walk_expr :: proc (expr: Expr) -> Atom
 		}
 	}
 
+	lnum, is_l_num := op.lhs.(f32)
+	rnum, is_r_num := op.rhs.(f32)
+
+	if is_l_num && is_r_num {
+		switch op.op {
+		case .Add: return lnum + rnum
+		case .Sub: return lnum - rnum
+		case .Mul: return lnum * rnum
+		case .Div: return lnum / rnum
+		}
+	}
+
 	op_ptr := new(Operation)
 	op_ptr ^= op
 
