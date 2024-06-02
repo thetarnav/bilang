@@ -5,17 +5,17 @@ import "core:strconv"
 import "core:strings"
 
 
+Assign :: struct {
+	lhs     : Expr,
+	op_token: Token,
+	rhs     : Expr,
+}
+
 Expr :: union {
 	^Ident,
 	^Number,
 	^Unary,
 	^Binary,
-}
-
-Assign :: struct {
-	lhs: Expr,
-	op : Token,
-	rhs: Expr,
 }
 
 Ident :: struct {
@@ -29,14 +29,28 @@ Number :: struct {
 }
 
 Unary :: struct {
-	op:   Token,
-	expr: Expr,
+	op      : Unary_Op,
+	op_token: Token,
+	expr    : Expr,
 }
 
 Binary :: struct {
-	lhs: Expr,
-	op : Token,
-	rhs: Expr,
+	lhs     : Expr,
+	op      : Binary_Op,
+	op_token: Token,
+	rhs     : Expr,
+}
+
+Unary_Op :: enum {
+	Pos,
+	Neg,
+}
+
+Binary_Op :: enum {
+	Add,
+	Sub,
+	Mul,
+	Div,
 }
 
 Parse_Error :: union {
@@ -127,7 +141,7 @@ parse_assign :: proc (p: ^Parser) -> (assign: ^Assign, err: Parse_Error) {
 	assign.lhs = parse_expr(p) or_return
 	
 	parser_curr_token_expect(p, .Eq) or_return
-	assign.op = p.token
+	assign.op_token = p.token
 
 	parser_next_token(p)
 	assign.rhs = parse_expr(p) or_return
@@ -155,15 +169,27 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) {
 		return expr, Unexpected_Token_Error{p.token}
 	}
 
-	#partial switch p.token.kind {
-	case .Add, .Sub, .Mul, .Div:
+	binary_block: {
+		op: Binary_Op
+
+		#partial switch p.token.kind {
+		case .Add: op = .Add
+		case .Sub: op = .Sub
+		case .Mul: op = .Mul
+		case .Div: op = .Div
+		case:
+			break binary_block
+		}
+
 		binary := new(Binary, p.allocator) or_return
-		binary.op  = p.token
+		binary.op = op
+		binary.op_token = p.token
 		binary.lhs = expr
 		parser_next_token(p)
 		binary.rhs = parse_expr(p) or_return
 		expr = binary
 	}
+
 
 	return
 }
@@ -184,11 +210,19 @@ parse_paren :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) {
 
 @(require_results)
 parse_unary :: proc (p: ^Parser) -> (unary: ^Unary, err: Parse_Error) {
-	assert(p.token.kind == .Add || p.token.kind == .Sub)
+	op: Unary_Op
+
+	#partial switch p.token.kind {
+	case .Add: op = .Pos
+	case .Sub: op = .Neg
+	case: unreachable()
+	}
 
 	unary = new(Unary, p.allocator) or_return
 
-	unary.op = p.token
+	unary.op = op
+	unary.op_token = p.token
+
 	parser_next_token(p)
 	unary.expr = parse_expr(p) or_return
 
