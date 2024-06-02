@@ -113,7 +113,7 @@ parser_curr_token_expect :: proc(
 }
 
 @(require_results)
-parse_file :: proc (
+parse_src :: proc (
 	src: string,
 	allocator := context.allocator,
 ) -> (res: []^Assign, err: Parse_Error)

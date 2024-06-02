@@ -23,112 +23,124 @@ _scope_handle_writer_flush :: proc (w: ^io.Writer)
 	bufio.writer_flush(cast(^bufio.Writer)w.data) // writer_to_writer assigns w.data to the bufio.Writer
 }
 
-print_decls :: proc (decls: []^Assign, fd := os.stdout)
+print_decls :: proc (decls: []^Assign, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
-	write_decls(w^, decls)
+	write_decls(w^, decls, highlight)
 }
-write_decls :: proc (w: io.Writer, decls: []^Assign)
+write_decls :: proc (w: io.Writer, decls: []^Assign, highlight := true)
 {
 	for assign in decls {
-		write_assign(w, assign)
+		write_assign(w, assign, highlight)
 	}
 }
 
-print_assign :: proc (assign: ^Assign, fd := os.stdout)
+print_assign :: proc (assign: ^Assign, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
-	write_assign(w^, assign)
+	write_assign(w^, assign, highlight)
 }
-write_assign :: proc (w: io.Writer, assign: ^Assign)
+write_assign :: proc (w: io.Writer, assign: ^Assign, highlight := true)
 {
-	write_expr(w, assign.lhs)
-	fmt.wprint(w, " \e[0;36m=\e[0m ")
-	write_expr(w, assign.rhs)
+	write_expr(w, assign.lhs, highlight)
+	fmt.wprint(w, " ")
+	if highlight do fmt.wprint(w, "\e[0;36m")
+	fmt.wprint(w, "=")
+	if highlight do fmt.wprint(w, "\e[0m")
+	fmt.wprint(w, " ")
+	write_expr(w, assign.rhs, highlight)
 	fmt.wprint(w, "\n")
 }
 
-print_expr :: proc (expr: Expr, fd := os.stdout)
+print_expr :: proc (expr: Expr, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
-	write_expr(w^, expr)
+	write_expr(w^, expr, highlight)
 }
-write_expr :: proc (w: io.Writer, expr: Expr)
+write_expr :: proc (w: io.Writer, expr: Expr, highlight := true)
 {
 	switch v in expr {
-	case ^Binary: write_binary(w, v)
-	case ^Unary:  write_unary (w, v)
-	case ^Ident:  write_ident (w, v)
-	case ^Number: write_number(w, v)
+	case ^Binary: write_binary(w, v, highlight)
+	case ^Unary:  write_unary (w, v, highlight)
+	case ^Ident:  write_ident (w, v, highlight)
+	case ^Number: write_number(w, v, highlight)
 	}
 
 	return
 }
 
-print_binary :: proc (binary: ^Binary, fd := os.stdout)
+print_binary :: proc (binary: ^Binary, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
-	write_binary(w^, binary)
+	write_binary(w^, binary, highlight)
 }
-write_binary :: proc (w: io.Writer, binary: ^Binary)
+write_binary :: proc (w: io.Writer, binary: ^Binary, highlight := true)
 {
-	fmt.wprint(w, "\e[38;5;240m(\e[0m")
+	if highlight do fmt.wprint(w, "\e[38;5;240m")
+	fmt.wprint(w, "(")
+	if highlight do fmt.wprint(w, "\e[0m")
 
-	fmt.wprint(w, "\e[0;36m")
+	if highlight do fmt.wprint(w, "\e[0;36m")
 	switch binary.op {
 	case .Add: fmt.wprint(w, "+")
 	case .Sub: fmt.wprint(w, "-")
 	case .Mul: fmt.wprint(w, "*")
 	case .Div: fmt.wprint(w, "/")
 	}
-	fmt.wprint(w, "\e[0m")
+	if highlight do fmt.wprint(w, "\e[0m")
 
 	fmt.wprint(w, " ")
-	write_expr(w, binary.lhs)
+	write_expr(w, binary.lhs, highlight)
 	fmt.wprint(w, " ")
-	write_expr(w, binary.rhs)
-	fmt.wprint(w, "\e[38;5;240m)\e[0m")
+	write_expr(w, binary.rhs, highlight)
+	if highlight do fmt.wprint(w, "\e[38;5;240m")
+	fmt.wprint(w, ")")
+	if highlight do fmt.wprint(w, "\e[0m")
 }
 
-print_unary :: proc (unary: ^Unary, fd := os.stdout)
+print_unary :: proc (unary: ^Unary, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
-	write_unary(w^, unary)
+	write_unary(w^, unary, highlight)
 }
-write_unary :: proc (w: io.Writer, unary: ^Unary)
+write_unary :: proc (w: io.Writer, unary: ^Unary, highlight := true)
 {	
-	fmt.wprint(w, "\e[38;5;240m(\e[0m")
+	if highlight do fmt.wprint(w, "\e[38;5;240m")
+	fmt.wprint(w, "(")
+	if highlight do fmt.wprint(w, "\e[0m")
 	
-	fmt.wprint(w, "\e[0;36m")
+	if highlight do fmt.wprint(w, "\e[0;36m")
 	switch unary.op {
 	case .Neg: fmt.wprint(w, "-")
 	case .Pos: fmt.wprint(w, "+")
 	}
-	fmt.wprint(w, "\e[0m")
+	if highlight do fmt.wprint(w, "\e[0m")
 
 	fmt.wprint(w, " ")
-	write_expr(w, unary.expr)
-	fmt.wprint(w, "\e[38;5;240m)\e[0m")
+	write_expr(w, unary.expr, highlight)
+	if highlight do fmt.wprint(w, "\e[38;5;240m")
+	fmt.wprint(w, ")")
+	if highlight do fmt.wprint(w, "\e[0m")
 }
 
-print_ident :: proc (ident: ^Ident, fd := os.stdout)
+print_ident :: proc (ident: ^Ident, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
-	write_ident(w^, ident)
+	write_ident(w^, ident, highlight)
 }
-write_ident :: proc (w: io.Writer, ident: ^Ident)
+write_ident :: proc (w: io.Writer, ident: ^Ident, highlight := true)
 {
 	fmt.wprint(w, ident.name)
 }
 
-print_number :: proc (number: ^Number, fd := os.stdout)
+print_number :: proc (number: ^Number, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
-	write_number(w^, number)
+	write_number(w^, number, highlight)
 }
-write_number :: proc (w: io.Writer, number: ^Number)
+write_number :: proc (w: io.Writer, number: ^Number, highlight := true)
 {
-	fmt.wprint(w, "\e[0;33m")
+	if highlight do fmt.wprint(w, "\e[0;33m")
 	fmt.wprint(w, number.value)
-	fmt.wprint(w, "\e[0m")
+	if highlight do fmt.wprint(w, "\e[0m")
 }
