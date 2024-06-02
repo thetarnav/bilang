@@ -10,7 +10,6 @@ Expr :: union {
 	^Number,
 	^Unary,
 	^Binary,
-	^Paren,
 }
 
 Assign :: struct {
@@ -38,12 +37,6 @@ Binary :: struct {
 	lhs: Expr,
 	op : Token,
 	rhs: Expr,
-}
-
-Paren :: struct {
-	open : Token,
-	expr : Expr,
-	close: Token,
 }
 
 Parse_Error :: union {
@@ -176,6 +169,33 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) {
 }
 
 @(require_results)
+parse_paren :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) {
+	assert(p.token.kind == .Paren_L)
+
+	parser_next_token(p)
+	expr = parse_expr(p) or_return
+
+	parser_curr_token_expect(p, .Paren_R) or_return
+
+	parser_next_token(p)
+
+	return
+}
+
+@(require_results)
+parse_unary :: proc (p: ^Parser) -> (unary: ^Unary, err: Parse_Error) {
+	assert(p.token.kind == .Add || p.token.kind == .Sub)
+
+	unary = new(Unary, p.allocator) or_return
+
+	unary.op = p.token
+	parser_next_token(p)
+	unary.expr = parse_expr(p) or_return
+
+	return
+}
+
+@(require_results)
 parse_ident :: proc (p: ^Parser) -> (ident: ^Ident, err: Parse_Error) {
 	assert(p.token.kind == .Ident)
 
@@ -203,36 +223,6 @@ parse_number :: proc (p: ^Parser) -> (number: ^Number, err: Parse_Error) {
 	number.token = p.token
 
 	parser_next_token(p)
-
-	return
-}
-
-@(require_results)
-parse_paren :: proc (p: ^Parser) -> (paren: ^Paren, err: Parse_Error) {
-	assert(p.token.kind == .Paren_L)
-
-	paren = new(Paren, p.allocator) or_return
-
-	paren.open = p.token
-	parser_next_token(p)
-	paren.expr = parse_expr(p) or_return
-	parser_curr_token_expect(p, .Paren_R) or_return
-	paren.close = p.token
-
-	parser_next_token(p)
-
-	return
-}
-
-@(require_results)
-parse_unary :: proc (p: ^Parser) -> (unary: ^Unary, err: Parse_Error) {
-	assert(p.token.kind == .Add || p.token.kind == .Sub)
-
-	unary = new(Unary, p.allocator) or_return
-
-	unary.op = p.token
-	parser_next_token(p)
-	unary.expr = parse_expr(p) or_return
 
 	return
 }
