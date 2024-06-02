@@ -6,7 +6,7 @@ import "core:fmt"
 print_assign :: proc (assign: ^Assign)
 {
 	print_expr(assign.lhs)
-	fmt.print(" = ")
+	fmt.print(" \e[0;36m=\e[0m ")
 	print_expr(assign.rhs)
 	fmt.print("\n")
 }
@@ -25,22 +25,30 @@ print_expr :: proc (expr: Expr)
 
 print_binary :: proc (binary: ^Binary)
 {
-	fmt.print("(")
+	fmt.print("\e[38;5;240m(\e[0m")
+
+	fmt.print("\e[0;36m")
 	fmt.print(binary.op)
+	fmt.print("\e[0m")
+
 	fmt.print(" ")
 	print_expr(binary.lhs)
 	fmt.print(" ")
 	print_expr(binary.rhs)
-	fmt.print(")")
+	fmt.print("\e[38;5;240m)\e[0m")
 }
 
 print_unary :: proc (unary: ^Unary)
 {	
-	fmt.print("(")
+	fmt.print("\e[38;5;240m(\e[0m")
+	
+	fmt.print("\e[0;36m")
 	fmt.print(unary.op)
+	fmt.print("\e[0m")
+
 	fmt.print(" ")
 	print_expr(unary.expr)
-	fmt.print(")")
+	fmt.print("\e[38;5;240m)\e[0m")
 }
 
 print_ident :: proc (ident: ^Ident)
@@ -50,5 +58,7 @@ print_ident :: proc (ident: ^Ident)
 
 print_number :: proc (number: ^Number)
 {
+	fmt.print("\e[0;33m")
 	fmt.print(number.value)
+	fmt.print("\e[0m")
 }
