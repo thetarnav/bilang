@@ -53,6 +53,13 @@ Binary_Op :: enum {
 	Div,
 }
 
+precedence_table := [Binary_Op]int {
+	.Add = 1,
+	.Sub = 1,
+	.Mul = 2,
+	.Div = 2,
+}
+
 Parse_Error :: union {
 	Allocator_Error,
 	Unexpected_Token_Error,
@@ -192,9 +199,18 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error)
 		binary.lhs = expr
 
 		parser_next_token(p)
-		binary.rhs = parse_expr(p) or_return
-
-		expr = binary
+		rhs := parse_expr(p) or_return
+		
+		if rhs_binary, is_binary := rhs.(^Binary); is_binary &&
+		   precedence_table[op] >= precedence_table[rhs_binary.op]
+		{
+			binary.rhs = rhs_binary.lhs
+			rhs_binary.lhs = binary
+			expr = rhs
+		} else {
+			binary.rhs = rhs
+			expr = binary
+		}
 	}
 
 
