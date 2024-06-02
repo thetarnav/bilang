@@ -47,25 +47,16 @@ a     = -4 + 2
 		append(&constraints, constraint)
 	}
 
-	for constraint in constraints {
-		fmt.printfln("%#v\n=\n%#v\n", constraint.lhs, constraint.rhs)
-	}
+	fmt.printfln("\n------\n")
+	print_contraints(constraints)
 
 	fmt.printfln("\n------\n")
-	
 	walk_constraints(&constraints)
-
-	for constraint in constraints {
-		fmt.printfln("%#v\n=\n%#v\n", constraint.lhs, constraint.rhs)
-	}
+	print_contraints(constraints)
 
 	fmt.printfln("\n------\n")
-	
 	walk_constraints(&constraints)
-
-	for constraint in constraints {
-		fmt.printfln("%#v\n=\n%#v\n", constraint.lhs, constraint.rhs)
-	}
+	print_contraints(constraints)
 }
 
 walk_expr :: proc (expr: Expr) -> Atom
@@ -84,7 +75,7 @@ walk_expr :: proc (expr: Expr) -> Atom
 	case ^Unary:
 		switch v.op {
 		case .Neg:
-			op.lhs = walk_expr(v.rhs)
+			op.rhs = walk_expr(v.rhs)
 			op.op = .Sub
 		case .Pos:
 			return walk_expr(v.rhs)
@@ -109,23 +100,61 @@ walk_expr :: proc (expr: Expr) -> Atom
 	return op_ptr
 }
 
-walk_constraints :: proc (constraints: ^[dynamic]Constraint) {
+walk_constraints :: proc (constraints: ^[dynamic]Constraint)
+{
 	for &constr, i in constraints {
 		constr.lhs = walk_atom(constr.lhs, i, constraints)
 		constr.rhs = walk_atom(constr.rhs, i, constraints)
+
+		l_has_deps := has_dependencies(constr.lhs)
+		r_has_deps := has_dependencies(constr.rhs)
+
+		if l_has_deps && r_has_deps do continue
+
+		if l_has_deps {
+			constr.lhs, constr.rhs = constr.rhs, constr.lhs
+		}
+
+		if op, is_op := constr.rhs.(^Operation); is_op {
+
+			op_l_has_deps := has_dependencies(op.lhs)
+			op_r_has_deps := has_dependencies(op.rhs)
+
+			if op_l_has_deps && op_r_has_deps do continue
+
+			op_ptr := new(Operation)
+
+			if !op_l_has_deps {
+				op_ptr.rhs = op.lhs
+				constr.rhs = op.rhs
+			} else {
+				op_ptr.rhs = op.rhs
+				constr.rhs = op.lhs
+			}
+			op_ptr.lhs = constr.lhs
+			constr.lhs = op_ptr
+
+			switch op.op {
+			case .Add: op_ptr.op = .Sub
+			case .Sub: op_ptr.op = .Add
+			case .Mul: op_ptr.op = .Div
+			case .Div: op_ptr.op = .Mul
+			}
+		}
 	}
 }
 
-walk_atom :: proc (atom: Atom, constr_i: int, constraints: ^[dynamic]Constraint) -> Atom {
+walk_atom :: proc (atom: Atom, constr_i: int, constraints: ^[dynamic]Constraint) -> Atom
+{
 	switch a in atom {
 	case f32:
 	case string:
 		for constr, i in constraints {
 			if i == constr_i do continue
-			if s, is_string := constr.lhs.(string); is_string && s == a {
+			if constr.lhs == a {
 				return constr.rhs
 			}
-			if s, is_string := constr.rhs.(string); is_string && s == a {
+			if constr.rhs == a {
 				return constr.lhs
 			}
 		}
@@ -146,4 +175,47 @@ walk_atom :: proc (atom: Atom, constr_i: int, constraints: ^[dynamic]Constraint)
 		}
 	}
 	return atom
+}
+
+has_dependencies :: proc (atom: Atom) -> bool
+{
+	switch a in atom {
+	case f32:
+	case string:
+		return true
+	case ^Operation:
+		return has_dependencies(a.lhs) || has_dependencies(a.rhs)
+	}
+	return false
+}
+
+print_contraints :: proc (constraints: [dynamic]Constraint)
+{
+	for constr in constraints {
+		print_atom(constr.lhs)
+		fmt.printf(" = ")
+		print_atom(constr.rhs)
+		fmt.printf("\n")
+	}
+}
+
+print_atom :: proc (atom: Atom)
+{
+	switch a in atom {
+	case f32:
+		fmt.printf("%f", a)
+	case string:
+		fmt.printf("%s", a)
+	case ^Operation:
+		fmt.printf("(")
+		print_atom(a.lhs)
+		switch a.op {
+		case .Add: fmt.printf(" + ")
+		case .Sub: fmt.printf(" - ")
+		case .Mul: fmt.printf(" * ")
+		case .Div: fmt.printf(" / ")
+		}
+		print_atom(a.rhs)
+		fmt.printf(")")
+	}
 }
