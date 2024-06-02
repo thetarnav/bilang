@@ -5,7 +5,7 @@ import "core:strconv"
 import "core:strings"
 
 
-Assign :: struct {
+Decl :: struct {
 	lhs     : Expr,
 	op_token: Token,
 	rhs     : Expr,
@@ -31,7 +31,7 @@ Number :: struct {
 Unary :: struct {
 	op      : Unary_Op,
 	op_token: Token,
-	expr    : Expr,
+	rhs     : Expr,
 }
 
 Binary :: struct {
@@ -116,9 +116,9 @@ parser_curr_token_expect :: proc(
 parse_src :: proc (
 	src: string,
 	allocator := context.allocator,
-) -> (res: []^Assign, err: Parse_Error)
+) -> (res: []^Decl, err: Parse_Error)
 {
-	decls := make([dynamic]^Assign, 0, 16, allocator) or_return
+	decls := make([dynamic]^Decl, 0, 16, allocator) or_return
 	defer shrink(&decls)
 
 	p: Parser = {
@@ -136,8 +136,8 @@ parse_src :: proc (
 		case .EOF:
 			break loop
 		case:
-			assign := parse_assign(&p) or_return
-			append(&decls, assign) or_return
+			decl := parse_decl(&p) or_return
+			append(&decls, decl) or_return
 		}
 	}
 
@@ -145,17 +145,17 @@ parse_src :: proc (
 	return
 }
 
-parse_assign :: proc (p: ^Parser) -> (assign: ^Assign, err: Parse_Error)
+parse_decl :: proc (p: ^Parser) -> (decl: ^Decl, err: Parse_Error)
 {
-	assign = new(Assign, p.allocator) or_return
+	decl = new(Decl, p.allocator) or_return
 
-	assign.lhs = parse_expr(p) or_return
+	decl.lhs = parse_expr(p) or_return
 	
 	parser_curr_token_expect(p, .Eq) or_return
-	assign.op_token = p.token
+	decl.op_token = p.token
 
 	parser_next_token(p)
-	assign.rhs = parse_expr(p) or_return
+	decl.rhs = parse_expr(p) or_return
 
 	parser_curr_token_expect(p, .EOL) or_return
 
@@ -256,7 +256,7 @@ parse_unary :: proc (p: ^Parser) -> (unary: ^Unary, err: Parse_Error)
 	unary.op_token = p.token
 
 	parser_next_token(p)
-	unary.expr = parse_expr_atom(p) or_return
+	unary.rhs = parse_expr_atom(p) or_return
 
 	return
 }

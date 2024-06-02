@@ -20,35 +20,35 @@ _scope_handle_writer :: #force_inline proc (fd: os.Handle) -> (w_ptr: ^io.Writer
 @(private)
 _scope_handle_writer_flush :: proc (w: ^io.Writer)
 {
-	bufio.writer_flush(cast(^bufio.Writer)w.data) // writer_to_writer assigns w.data to the bufio.Writer
+	bufio.writer_flush(cast(^bufio.Writer)w.data) // writer_to_writer decls w.data to the bufio.Writer
 }
 
-print_decls :: proc (decls: []^Assign, highlight := true, fd := os.stdout)
+print_decls :: proc (decls: []^Decl, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
 	write_decls(w^, decls, highlight)
 }
-write_decls :: proc (w: io.Writer, decls: []^Assign, highlight := true)
+write_decls :: proc (w: io.Writer, decls: []^Decl, highlight := true)
 {
-	for assign in decls {
-		write_assign(w, assign, highlight)
+	for decl in decls {
+		write_decl(w, decl, highlight)
 	}
 }
 
-print_assign :: proc (assign: ^Assign, highlight := true, fd := os.stdout)
+print_decl :: proc (decl: ^Decl, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
-	write_assign(w^, assign, highlight)
+	write_decl(w^, decl, highlight)
 }
-write_assign :: proc (w: io.Writer, assign: ^Assign, highlight := true)
+write_decl :: proc (w: io.Writer, decl: ^Decl, highlight := true)
 {
-	write_expr(w, assign.lhs, highlight)
+	write_expr(w, decl.lhs, highlight)
 	fmt.wprint(w, " ")
 	if highlight do fmt.wprint(w, "\e[0;36m")
 	fmt.wprint(w, "=")
 	if highlight do fmt.wprint(w, "\e[0m")
 	fmt.wprint(w, " ")
-	write_expr(w, assign.rhs, highlight)
+	write_expr(w, decl.rhs, highlight)
 	fmt.wprint(w, "\n")
 }
 
@@ -117,7 +117,7 @@ write_unary :: proc (w: io.Writer, unary: ^Unary, highlight := true)
 	if highlight do fmt.wprint(w, "\e[0m")
 
 	fmt.wprint(w, " ")
-	write_expr(w, unary.expr, highlight)
+	write_expr(w, unary.rhs, highlight)
 	if highlight do fmt.wprint(w, "\e[38;5;240m")
 	fmt.wprint(w, ")")
 	if highlight do fmt.wprint(w, "\e[0m")
