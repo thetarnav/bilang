@@ -171,14 +171,7 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error)
 	-a * b + c
 	*/
 
-	#partial switch p.token.kind {
-	case .Ident:     expr = parse_ident(p)  or_return
-	case .Num:       expr = parse_number(p) or_return
-	case .Paren_L:   expr = parse_paren(p)  or_return
-	case .Add, .Sub: expr = parse_unary(p)  or_return
-	case:
-		return expr, Unexpected_Token_Error{p.token}
-	}
+	expr = parse_expr_atom(p) or_return
 
 	binary_block: {
 		op: Binary_Op
@@ -213,6 +206,20 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error)
 		}
 	}
 
+	return
+}
+
+@(require_results)
+parse_expr_atom :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error)
+{
+	#partial switch p.token.kind {
+	case .Ident:     expr = parse_ident(p)  or_return
+	case .Num:       expr = parse_number(p) or_return
+	case .Paren_L:   expr = parse_paren(p)  or_return
+	case .Add, .Sub: expr = parse_unary(p)  or_return
+	case:
+		return expr, Unexpected_Token_Error{p.token}
+	}
 
 	return
 }
@@ -249,7 +256,7 @@ parse_unary :: proc (p: ^Parser) -> (unary: ^Unary, err: Parse_Error)
 	unary.op_token = p.token
 
 	parser_next_token(p)
-	unary.expr = parse_expr(p) or_return
+	unary.expr = parse_expr_atom(p) or_return
 
 	return
 }

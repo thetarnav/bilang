@@ -7,13 +7,13 @@ import test "core:testing"
 @test test_parser :: proc (t: ^test.T)
 {
 	input := `
-a     = -69.5
+a     = -69.5 + 2
 a + b = c * 4 + -20
 a - b = 10 * (5 + 15) / 2
 `
 
 	expected :=
-`a = (- 69.5)
+`a = (+ (- 69.5) 2)
 (+ a b) = (+ (* c 4) (- 20))
 (- a b) = (/ (* 10 (+ 5 15)) 2)
 `
@@ -27,5 +27,9 @@ a - b = 10 * (5 + 15) / 2
 
 	output := strings.to_string(b)
 
-	test.expect_value(t, output, expected)
+	test.expectf(t,
+		output == expected,
+		"\nEXPECTED:\n%s\nACTUAL:\n%s",
+		expected, output
+	)
 }
