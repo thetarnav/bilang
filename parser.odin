@@ -99,9 +99,9 @@ parser_curr_token_expect :: proc(
 parse_file :: proc (
 	src: string,
 	allocator := context.allocator,
-) -> (res: []Expr, err: Parse_Error) {
+) -> (res: []^Assign, err: Parse_Error) {
 
-	decls := make([dynamic]Expr, 0, 16, allocator) or_return
+	decls := make([dynamic]^Assign, 0, 16, allocator) or_return
 	defer shrink(&decls)
 
 	p: Parser = {
@@ -109,30 +109,40 @@ parse_file :: proc (
 		t         = make_tokenizer(src),
 		allocator = allocator,
 	}
+	parser_next_token(&p)
 	
 	loop: for {
-		parser_next_token(&p)
-
 		#partial switch p.token.kind {
 		case .EOL:
+			parser_next_token(&p)
 			continue
 		case .EOF:
 			break loop
 		case:
-			expr := parse_expr(&p) or_return
-			append(&decls, expr) or_return
+			assign := parse_assign(&p) or_return
+			append(&decls, assign) or_return
 		}
-
-		parser_curr_token_expect(&p, .Eq) or_return
-
-		parser_next_token(&p)
-		expr := parse_expr(&p) or_return
-		append(&decls, expr) or_return
-
-		parser_curr_token_expect(&p, .EOL) or_return
 	}
 
 	res = decls[:]
+	return
+}
+
+parse_assign :: proc (p: ^Parser) -> (assign: ^Assign, err: Parse_Error) {
+	assign = new(Assign, p.allocator) or_return
+
+	assign.lhs = parse_expr(p) or_return
+	
+	parser_curr_token_expect(p, .Eq) or_return
+	assign.op = p.token
+
+	parser_next_token(p)
+	assign.rhs = parse_expr(p) or_return
+
+	parser_curr_token_expect(p, .EOL) or_return
+
+	parser_next_token(p)
+
 	return
 }
 
