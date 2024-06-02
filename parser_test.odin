@@ -30,6 +30,6 @@ a - b = 10 * (5 + 15) / 2
 	test.expectf(t,
 		output == expected,
 		"\nEXPECTED:\n%s\nACTUAL:\n%s",
-		expected, output
+		expected, output,
 	)
 }

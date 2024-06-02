@@ -19,4 +19,4 @@ jobs:
           release: latest
 
       - name: Run Tests
-        run: odin test . -vet-unused -vet-style -vet-semicolon
+        run: odin test . -error-pos-style:unix

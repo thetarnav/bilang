@@ -189,7 +189,7 @@ test_tokenizer_cases :: proc(t: ^test.T) {
 				text == expected.text &&
 				token.kind == expected.kind,
 				"\n\e[0;32m%q\e[0m:\e[0;31m\nexpected tokens[%d] to be %s `%s`, got %s `%s`\n\e[0m%s",
-				test_case.name, i, expected.kind, expected.text, token.kind, text, display_token_in_line(test_case.src, token)
+				test_case.name, i, expected.kind, expected.text, token.kind, text, display_token_in_line(test_case.src, token),
 			)
 			good = good && token_good
 		}
