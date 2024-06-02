@@ -76,14 +76,16 @@ Parser :: struct {
 	allocator: mem.Allocator,
 }
 
-parser_next_token :: proc(p: ^Parser) {
+parser_next_token :: proc(p: ^Parser)
+{
 	p.token = next_token(&p.t)
 }
 
 parser_next_token_expect :: proc(
 	p: ^Parser,
 	expected: Token_Kind,
-) -> (err: Parse_Error) {
+) -> (err: Parse_Error)
+{
 	ok: bool
 	p.token, ok = next_token_expect(&p.t, expected)
 	if !ok {
@@ -95,7 +97,8 @@ parser_next_token_expect :: proc(
 parser_curr_token_expect :: proc(
 	p: ^Parser,
 	expected: Token_Kind,
-) -> (err: Parse_Error) {
+) -> (err: Parse_Error)
+{
 	if p.token.kind != expected {
 		err = Unexpected_Token_Error{p.token}
 	}
@@ -106,8 +109,8 @@ parser_curr_token_expect :: proc(
 parse_file :: proc (
 	src: string,
 	allocator := context.allocator,
-) -> (res: []^Assign, err: Parse_Error) {
-
+) -> (res: []^Assign, err: Parse_Error)
+{
 	decls := make([dynamic]^Assign, 0, 16, allocator) or_return
 	defer shrink(&decls)
 
@@ -135,7 +138,8 @@ parse_file :: proc (
 	return
 }
 
-parse_assign :: proc (p: ^Parser) -> (assign: ^Assign, err: Parse_Error) {
+parse_assign :: proc (p: ^Parser) -> (assign: ^Assign, err: Parse_Error)
+{
 	assign = new(Assign, p.allocator) or_return
 
 	assign.lhs = parse_expr(p) or_return
@@ -154,8 +158,8 @@ parse_assign :: proc (p: ^Parser) -> (assign: ^Assign, err: Parse_Error) {
 }
 
 @(require_results)
-parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) {
-
+parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error)
+{
 	/*
 	-a * b + c
 	*/
@@ -182,11 +186,14 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) {
 		}
 
 		binary := new(Binary, p.allocator) or_return
+
 		binary.op = op
 		binary.op_token = p.token
 		binary.lhs = expr
+
 		parser_next_token(p)
 		binary.rhs = parse_expr(p) or_return
+
 		expr = binary
 	}
 
@@ -195,7 +202,8 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) {
 }
 
 @(require_results)
-parse_paren :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) {
+parse_paren :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error)
+{
 	assert(p.token.kind == .Paren_L)
 
 	parser_next_token(p)
@@ -209,7 +217,8 @@ parse_paren :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) {
 }
 
 @(require_results)
-parse_unary :: proc (p: ^Parser) -> (unary: ^Unary, err: Parse_Error) {
+parse_unary :: proc (p: ^Parser) -> (unary: ^Unary, err: Parse_Error)
+{
 	op: Unary_Op
 
 	#partial switch p.token.kind {
@@ -230,7 +239,8 @@ parse_unary :: proc (p: ^Parser) -> (unary: ^Unary, err: Parse_Error) {
 }
 
 @(require_results)
-parse_ident :: proc (p: ^Parser) -> (ident: ^Ident, err: Parse_Error) {
+parse_ident :: proc (p: ^Parser) -> (ident: ^Ident, err: Parse_Error)
+{
 	assert(p.token.kind == .Ident)
 
 	ident = new(Ident, p.allocator) or_return
@@ -243,7 +253,8 @@ parse_ident :: proc (p: ^Parser) -> (ident: ^Ident, err: Parse_Error) {
 }
 
 @(require_results)
-parse_number :: proc (p: ^Parser) -> (number: ^Number, err: Parse_Error) {
+parse_number :: proc (p: ^Parser) -> (number: ^Number, err: Parse_Error)
+{
 	assert(p.token.kind == .Num)
 
 	number = new(Number, p.allocator) or_return
@@ -265,11 +276,12 @@ parse_number :: proc (p: ^Parser) -> (number: ^Number, err: Parse_Error) {
 Return a pretty string representation of a parser error.
 */
 @(require_results)
-parser_error_to_string :: proc(
+parser_error_to_string :: proc (
 	src: string,
 	parser_err: Parse_Error,
 	allocator := context.allocator,
-) -> (text: string, err: mem.Allocator_Error) #optional_allocator_error {
+) -> (text: string, err: mem.Allocator_Error) #optional_allocator_error
+{
 	context.allocator = allocator
 
 	switch e in parser_err {
