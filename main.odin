@@ -3,10 +3,11 @@ package bilang
 import "core:fmt"
 import "core:os"
 
+
 Atom :: union #no_nil {
 	f32,
-	^Operation,
 	string,
+	^Operation,
 }
 
 Operation :: struct {
@@ -45,6 +46,22 @@ a     = -4 + 2
 		constraint.rhs = walk_expr(decl.rhs)
 		append(&constraints, constraint)
 	}
+
+	for constraint in constraints {
+		fmt.printfln("%#v\n=\n%#v\n", constraint.lhs, constraint.rhs)
+	}
+
+	fmt.printfln("\n------\n")
+	
+	walk_constraints(&constraints)
+
+	for constraint in constraints {
+		fmt.printfln("%#v\n=\n%#v\n", constraint.lhs, constraint.rhs)
+	}
+
+	fmt.printfln("\n------\n")
+	
+	walk_constraints(&constraints)
 
 	for constraint in constraints {
 		fmt.printfln("%#v\n=\n%#v\n", constraint.lhs, constraint.rhs)
@@ -90,4 +107,43 @@ walk_expr :: proc (expr: Expr) -> Atom
 	op_ptr ^= op
 
 	return op_ptr
+}
+
+walk_constraints :: proc (constraints: ^[dynamic]Constraint) {
+	for &constr, i in constraints {
+		constr.lhs = walk_atom(constr.lhs, i, constraints)
+		constr.rhs = walk_atom(constr.rhs, i, constraints)
+	}
+}
+
+walk_atom :: proc (atom: Atom, constr_i: int, constraints: ^[dynamic]Constraint) -> Atom {
+	switch a in atom {
+	case f32:
+	case string:
+		for constr, i in constraints {
+			if i == constr_i do continue
+			if s, is_string := constr.lhs.(string); is_string && s == a {
+				return constr.rhs
+			}
+			if s, is_string := constr.rhs.(string); is_string && s == a {
+				return constr.lhs
+			}
+		}
+	case ^Operation:
+		a.lhs = walk_atom(a.lhs, constr_i, constraints)
+		a.rhs = walk_atom(a.rhs, constr_i, constraints)
+
+		lnum, is_l_num := a.lhs.(f32)
+		rnum, is_r_num := a.rhs.(f32)
+
+		if is_l_num && is_r_num {
+			switch a.op {
+			case .Add: return lnum + rnum
+			case .Sub: return lnum - rnum
+			case .Mul: return lnum * rnum
+			case .Div: return lnum / rnum
+			}
+		}
+	}
+	return atom
 }
