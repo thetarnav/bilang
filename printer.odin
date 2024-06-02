@@ -5,21 +5,28 @@ import "core:io"
 import "core:os"
 import "core:bufio"
 
-@(private, deferred_out=bufio.writer_flush)
-_scope_bufio_writer :: #force_inline proc (fd: os.Handle) -> (b_ptr: ^bufio.Writer) {
+@(private, deferred_out=_scope_handle_writer_flush)
+_scope_handle_writer :: #force_inline proc (fd: os.Handle) -> (w_ptr: ^io.Writer)
+{
 	buf: [1024]byte
 	b: bufio.Writer
-	b_ptr = &b
-
 	bufio.writer_init_with_buf(&b, os.stream_from_handle(fd), buf[:])
+
+	w := bufio.writer_to_writer(&b)
+	w_ptr = &w // sidestep returning a pointer to a local variable warning (the proc is inlined)
 	
 	return
+}
+@(private)
+_scope_handle_writer_flush :: proc (w: ^io.Writer)
+{
+	bufio.writer_flush(cast(^bufio.Writer)w.data) // writer_to_writer assigns w.data to the bufio.Writer
 }
 
 print_decls :: proc (decls: []^Assign, fd := os.stdout)
 {
-	w := bufio.writer_to_writer(_scope_bufio_writer(fd))
-	write_decls(w, decls)
+	w := _scope_handle_writer(fd)
+	write_decls(w^, decls)
 }
 write_decls :: proc (w: io.Writer, decls: []^Assign)
 {
@@ -30,8 +37,8 @@ write_decls :: proc (w: io.Writer, decls: []^Assign)
 
 print_assign :: proc (assign: ^Assign, fd := os.stdout)
 {
-	w := bufio.writer_to_writer(_scope_bufio_writer(fd))
-	write_assign(w, assign)
+	w := _scope_handle_writer(fd)
+	write_assign(w^, assign)
 }
 write_assign :: proc (w: io.Writer, assign: ^Assign)
 {
@@ -43,8 +50,8 @@ write_assign :: proc (w: io.Writer, assign: ^Assign)
 
 print_expr :: proc (expr: Expr, fd := os.stdout)
 {
-	w := bufio.writer_to_writer(_scope_bufio_writer(fd))
-	write_expr(w, expr)
+	w := _scope_handle_writer(fd)
+	write_expr(w^, expr)
 }
 write_expr :: proc (w: io.Writer, expr: Expr)
 {
@@ -60,8 +67,8 @@ write_expr :: proc (w: io.Writer, expr: Expr)
 
 print_binary :: proc (binary: ^Binary, fd := os.stdout)
 {
-	w := bufio.writer_to_writer(_scope_bufio_writer(fd))
-	write_binary(w, binary)
+	w := _scope_handle_writer(fd)
+	write_binary(w^, binary)
 }
 write_binary :: proc (w: io.Writer, binary: ^Binary)
 {
@@ -85,8 +92,8 @@ write_binary :: proc (w: io.Writer, binary: ^Binary)
 
 print_unary :: proc (unary: ^Unary, fd := os.stdout)
 {
-	w := bufio.writer_to_writer(_scope_bufio_writer(fd))
-	write_unary(w, unary)
+	w := _scope_handle_writer(fd)
+	write_unary(w^, unary)
 }
 write_unary :: proc (w: io.Writer, unary: ^Unary)
 {	
@@ -106,8 +113,8 @@ write_unary :: proc (w: io.Writer, unary: ^Unary)
 
 print_ident :: proc (ident: ^Ident, fd := os.stdout)
 {
-	w := bufio.writer_to_writer(_scope_bufio_writer(fd))
-	write_ident(w, ident)
+	w := _scope_handle_writer(fd)
+	write_ident(w^, ident)
 }
 write_ident :: proc (w: io.Writer, ident: ^Ident)
 {
@@ -116,8 +123,8 @@ write_ident :: proc (w: io.Writer, ident: ^Ident)
 
 print_number :: proc (number: ^Number, fd := os.stdout)
 {
-	w := bufio.writer_to_writer(_scope_bufio_writer(fd))
-	write_number(w, number)
+	w := _scope_handle_writer(fd)
+	write_number(w^, number)
 }
 write_number :: proc (w: io.Writer, number: ^Number)
 {
