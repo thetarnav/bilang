@@ -44,6 +44,17 @@ import test "core:testing"
 			"b = 12"+"\n"+
 			"a = -2"+"\n",	
 		},
+		{
+			"y = a * x + b"+"\n"+
+			"a = 1 / 2"+"\n"+
+			"b = -4"+"\n"+
+			"y = 2"+"\n",
+
+			"x = 12"+"\n"+
+			"a = 0.5"+"\n"+
+			"b = -4"+"\n"+
+			"y = 2"+"\n",
+		},
 	}
 
 	@static arena_buf: [mem.Megabyte]byte
