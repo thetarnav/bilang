@@ -23,6 +23,14 @@ _scope_handle_writer_flush :: proc (w: ^io.Writer)
 	bufio.writer_flush(cast(^bufio.Writer)w.data) // writer_to_writer decls w.data to the bufio.Writer
 }
 
+
+/*
+
+AST
+
+*/
+
+
 print_decls :: proc (decls: []^Decl, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
@@ -143,4 +151,72 @@ write_number :: proc (w: io.Writer, number: ^Number, highlight := true)
 	if highlight do fmt.wprint(w, "\e[0;33m")
 	fmt.wprint(w, number.value)
 	if highlight do fmt.wprint(w, "\e[0m")
+}
+
+
+/*
+
+CONSTRAINTS
+
+*/
+
+
+print_contraints :: proc (constraints: []Constraint, highlight := true, fd := os.stdout)
+{
+	w := _scope_handle_writer(fd)
+	write_contraints(w^, constraints, highlight)
+}
+write_contraints :: proc (w: io.Writer, constraints: []Constraint, highlight := true)
+{
+	for constr in constraints {
+		write_atom(w, constr.lhs, highlight)
+
+		if highlight do fmt.wprint(w, "\e[0;36m")
+		fmt.wprint(w, " = ")
+		if highlight do fmt.wprint(w, "\e[0m")
+
+		write_atom(w, constr.rhs, highlight)
+
+		fmt.wprint(w, "\n")
+	}
+}
+
+print_atom :: proc (atom: Atom, highlight := true, fd := os.stdout)
+{
+	w := _scope_handle_writer(fd)
+	write_atom(w^, atom, highlight)
+}
+write_atom :: proc (w: io.Writer, atom: Atom, highlight := true)
+{
+	switch a in atom {
+	case f32:
+		if highlight do fmt.wprint(w, "\e[0;33m")
+		fmt.wprint(w, a)
+		if highlight do fmt.wprint(w, "\e[0m")
+	case string:
+		fmt.wprint(w, a)
+	case ^Operation:
+		if highlight do fmt.wprint(w, "\e[38;5;240m")
+		fmt.wprint(w, "(")
+		if highlight do fmt.wprint(w, "\e[0m")
+
+		if highlight do fmt.wprint(w, "\e[0;36m")
+		switch a.op {
+		case .Add: fmt.wprint(w, "+ ")
+		case .Sub: fmt.wprint(w, "- ")
+		case .Mul: fmt.wprint(w, "* ")
+		case .Div: fmt.wprint(w, "/ ")
+		}
+		if highlight do fmt.wprint(w, "\e[0m")
+
+		write_atom(w, a.lhs, highlight)
+
+		fmt.wprint(w, " ")
+
+		write_atom(w, a.rhs, highlight)
+
+		if highlight do fmt.wprint(w, "\e[38;5;240m")
+		fmt.wprint(w, ")")
+		if highlight do fmt.wprint(w, "\e[0m")
+	}
 }

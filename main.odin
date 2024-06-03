@@ -78,15 +78,15 @@ a     = -4 + 2
 
 
 	fmt.printfln("\n------\n")
-	print_contraints(constraints)
+	print_contraints(constraints[:])
 
 	fmt.printfln("\n------\n")
 	walk_constraints(&constraints)
-	print_contraints(constraints)
+	print_contraints(constraints[:])
 
 	fmt.printfln("\n------\n")
 	walk_constraints(&constraints)
-	print_contraints(constraints)
+	print_contraints(constraints[:])
 }
 
 walk_expr :: proc (expr: Expr) -> Atom
@@ -171,6 +171,8 @@ walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 		case .Mul: op_ptr.op = .Div
 		case .Div: op_ptr.op = .Mul
 		}
+
+		constr.rhs = walk_atom(constr.rhs, i, constraints)
 	}
 }
 
@@ -217,35 +219,4 @@ has_dependencies :: proc (atom: Atom) -> bool
 		return has_dependencies(a.lhs) || has_dependencies(a.rhs)
 	}
 	return false
-}
-
-print_contraints :: proc (constraints: [dynamic]Constraint)
-{
-	for constr in constraints {
-		print_atom(constr.lhs)
-		fmt.printf(" = ")
-		print_atom(constr.rhs)
-		fmt.printf("\n")
-	}
-}
-
-print_atom :: proc (atom: Atom)
-{
-	switch a in atom {
-	case f32:
-		fmt.printf("%f", a)
-	case string:
-		fmt.printf("%s", a)
-	case ^Operation:
-		fmt.printf("(")
-		print_atom(a.lhs)
-		switch a.op {
-		case .Add: fmt.printf(" + ")
-		case .Sub: fmt.printf(" - ")
-		case .Mul: fmt.printf(" * ")
-		case .Div: fmt.printf(" / ")
-		}
-		print_atom(a.rhs)
-		fmt.printf(")")
-	}
 }
