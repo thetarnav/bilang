@@ -141,35 +141,35 @@ walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 
 		if l_has_deps && r_has_deps do continue
 
-		if l_has_deps {
+		if r_has_deps {
 			constr.lhs, constr.rhs = constr.rhs, constr.lhs
 		}
 
-		if op, is_op := constr.rhs.(^Operation); is_op {
+		op, is_op := constr.lhs.(^Operation)
+		if !is_op do continue
 
-			op_l_has_deps := has_dependencies(op.lhs)
-			op_r_has_deps := has_dependencies(op.rhs)
+		op_l_has_deps := has_dependencies(op.lhs)
+		op_r_has_deps := has_dependencies(op.rhs)
 
-			if op_l_has_deps && op_r_has_deps do continue
+		if op_l_has_deps && op_r_has_deps do continue
 
-			op_ptr := new(Operation)
+		op_ptr := new(Operation)
 
-			if !op_l_has_deps {
-				op_ptr.rhs = op.lhs
-				constr.rhs = op.rhs
-			} else {
-				op_ptr.rhs = op.rhs
-				constr.rhs = op.lhs
-			}
-			op_ptr.lhs = constr.lhs
-			constr.lhs = op_ptr
+		if !op_l_has_deps {
+			op_ptr.rhs = op.lhs
+			constr.lhs = op.rhs
+		} else {
+			op_ptr.rhs = op.rhs
+			constr.lhs = op.lhs
+		}
+		op_ptr.lhs = constr.rhs
+		constr.rhs = op_ptr
 
-			switch op.op {
-			case .Add: op_ptr.op = .Sub
-			case .Sub: op_ptr.op = .Add
-			case .Mul: op_ptr.op = .Div
-			case .Div: op_ptr.op = .Mul
-			}
+		switch op.op {
+		case .Add: op_ptr.op = .Sub
+		case .Sub: op_ptr.op = .Add
+		case .Mul: op_ptr.op = .Div
+		case .Div: op_ptr.op = .Mul
 		}
 	}
 }
