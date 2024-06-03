@@ -4,28 +4,26 @@ import "core:strings"
 import test "core:testing"
 
 
-@test test_parser :: proc (t: ^test.T)
+@test test_solver :: proc (t: ^test.T)
 {
-	input := `
-a     = -69.5 + 2
-a + b = c * 4 + -20
-a - b = 10 * (5 + 15) / 2
+	input :=`
+a + b = 10
+a     = -4 + 2
 `
 
 	expected :=
-`a = (+ (- 69.5) 2)
-(+ a b) = (+ (* c 4) (- 20))
-(- a b) = (/ (* 10 (+ 5 15)) 2)
+`b = 12
+a = -2
 `
 
 	decls, err := parse_src(input)
 
-	test.expect_value(t, err, nil)
+	constraints := solve(decls)
 
 	b := strings.builder_make_len_cap(0, 1024)
 	w := strings.to_writer(&b)
 
-	write_decls(w, decls, false)
+	write_contraints(w, constraints, false)
 
 	output := strings.to_string(b)
 
