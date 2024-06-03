@@ -9,8 +9,8 @@ import test "core:testing"
 @test test_solver :: proc (t: ^test.T)
 {
 	cases := []struct {
-		input   : string,
-		expected: string,
+		input: string,
+		solve: string,
 	}{
 		{
 			"3 - x + 2 = 3",
@@ -55,6 +55,11 @@ import test "core:testing"
 			"b = -4"+"\n"+
 			"y = 2"+"\n",
 		},
+		{
+			"(n * 2 + 10) / (n + 1) = 3",
+
+			"n = 7"+"\n",
+		},
 	}
 
 	@static arena_buf: [mem.Megabyte]byte
@@ -88,11 +93,24 @@ import test "core:testing"
 		write_contraints(w, constraints, false)
 	
 		output := strings.to_string(b)
+
+		if output != test_case.solve {
+
+			strings.builder_reset(&b) // makes output unusable !!!
+
+			write_contraints(w, constraints)
+			output_pretty := strings.clone(strings.to_string(b))
+
+			strings.builder_reset(&b)
+
+			write_decls(w, decls)
+			decls_pretty := strings.clone(strings.to_string(b))
+
+			test.errorf(t,
+				"\n\nCASE:\n%s\nPARSED:\n%s\e[0;32mEXPECTED:\e[0m\n%s\e[0;31mACTUAL:\e[0m\n%s",
+				test_case.input, decls_pretty, test_case.solve, output_pretty,
+			)
+		}
 	
-		test.expectf(t,
-			output == test_case.expected,
-			"\n\nCASE:\n%s\n\e[0;32mEXPECTED:\e[0m\n%s\e[0;31mACTUAL:\e[0m\n%s",
-			test_case.input, test_case.expected, output,
-		)
 	}
 }
