@@ -20,7 +20,12 @@ a - b = 10 * (5 + 15) / 2
 
 	decls, err := parse_src(input)
 
-	test.expect_value(t, err, nil)
+	if err != nil {
+		test.errorf(t,
+			"\nFailed to parse input:\n%s",
+			parser_error_to_string(input, err),
+		)
+	}
 
 	b := strings.builder_make_len_cap(0, 1024)
 	w := strings.to_writer(&b)

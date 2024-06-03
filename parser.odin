@@ -157,7 +157,12 @@ parse_decl :: proc (p: ^Parser) -> (decl: ^Decl, err: Parse_Error)
 	parser_next_token(p)
 	decl.rhs = parse_expr(p) or_return
 
-	parser_curr_token_expect(p, .EOL) or_return
+	#partial switch p.token.kind {
+	case .EOL, .EOF:
+		// good
+	case:
+		err = Unexpected_Token_Error{p.token}
+	}
 
 	parser_next_token(p)
 
