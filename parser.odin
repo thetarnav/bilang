@@ -53,6 +53,26 @@ Binary_Op :: enum {
 	Div,
 }
 
+token_to_unary_op :: #force_inline proc (kind: Token_Kind) -> (op: Unary_Op, ok: bool)
+{
+	#partial switch kind {
+	case .Add: return .Pos, true
+	case .Sub: return .Neg, true
+	}
+	return
+}
+
+token_to_binary_op :: #force_inline proc (kind: Token_Kind) -> (op: Binary_Op, ok: bool)
+{
+	#partial switch kind {
+	case .Add: return .Add, true
+	case .Sub: return .Sub, true
+	case .Mul: return .Mul, true
+	case .Div: return .Div, true
+	}
+	return
+}
+
 precedence_table := [Binary_Op]int {
 	.Add = 1,
 	.Sub = 1,
@@ -170,7 +190,7 @@ parse_decl :: proc (p: ^Parser) -> (decl: ^Decl, err: Parse_Error)
 }
 
 @(require_results)
-parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error)
+parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) #no_bounds_check
 {
 	/*
 	-a * b + c
@@ -179,35 +199,43 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error)
 	expr = parse_expr_atom(p) or_return
 
 	binary_block: {
-		op: Binary_Op
-
-		#partial switch p.token.kind {
-		case .Add: op = .Add
-		case .Sub: op = .Sub
-		case .Mul: op = .Mul
-		case .Div: op = .Div
-		case:
-			break binary_block
-		}
-
+		op := token_to_binary_op(p.token.kind) or_break binary_block
+	
 		binary := new(Binary, p.allocator) or_return
-
-		binary.op = op
+	
+		binary.op       = op
 		binary.op_token = p.token
-		binary.lhs = expr
-
+		binary.lhs      = expr
+	
 		parser_next_token(p)
-		rhs := parse_expr(p) or_return
+		binary.rhs = parse_expr_atom(p) or_return
+	
+		binary_last := binary
+		op_last     := op
 		
-		if rhs_binary, is_binary := rhs.(^Binary); is_binary &&
-		   precedence_table[op] >= precedence_table[rhs_binary.op]
-		{
-			binary.rhs = rhs_binary.lhs
-			rhs_binary.lhs = binary
-			expr = rhs
-		} else {
-			binary.rhs = rhs
-			expr = binary
+		expr = binary
+	
+		for {
+			op = token_to_binary_op(p.token.kind) or_break binary_block
+	
+			binary = new(Binary, p.allocator) or_return
+	
+			binary.op       = op
+			binary.op_token = p.token
+	
+			parser_next_token(p)
+			binary.rhs = parse_expr_atom(p) or_return
+	
+			if precedence_table[op_last] >= precedence_table[op] {
+				binary.lhs = expr
+				expr       = binary
+			} else {
+				binary.lhs      = binary_last.rhs
+				binary_last.rhs = binary
+			}
+			
+			binary_last = binary
+			op_last     = op
 		}
 	}
 

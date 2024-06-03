@@ -13,6 +13,21 @@ import test "core:testing"
 		solve: string,
 	}{
 		{
+			"a + b * c + d * e = 0",
+
+			"(+ (+ a (* b c)) (* d e)) = 0\n",
+		},
+		{
+			"a * b + c * d + e = 0",
+
+			"(+ (+ (* a b) (* c d)) e) = 0\n",
+		},
+		{
+			"(n * 2 + 10) / (n + 1) = 3",
+
+			"(/ (+ (* n 2) 10) (+ n 1)) = 3\n",
+		},
+		{
 			"\n"+
 			"a     = -69.5 + 2"+"\n"+
 			"a + b = c * 4 + -20"+"\n"+
@@ -21,11 +36,6 @@ import test "core:testing"
 			"a = (+ (- 69.5) 2)"+"\n"+
 			"(+ a b) = (+ (* c 4) (- 20))"+"\n"+
 			"(- a b) = (/ (* 10 (+ 5 15)) 2)"+"\n",
-		},
-		{
-			"(n * 2 + 10) / (n + 1) = 3",
-
-			"(/ (+ (* n 2) 10) (+ n 1)) = 3\n",
 		},
 	}
 
@@ -50,6 +60,7 @@ import test "core:testing"
 				"\nFailed to parse input:\n%s",
 				parser_error_to_string(test_case.input, err),
 			)
+			continue
 		}
 	
 		b := strings.builder_make_len_cap(0, 1024)
