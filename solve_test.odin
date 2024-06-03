@@ -18,12 +18,32 @@ import test "core:testing"
 			"x = 2"+"\n",
 		},
 		{
+			"3 / x = 1",
+
+			"x = 3"+"\n",
+		},
+		{
+			"x / 3 = 1",
+
+			"x = 3"+"\n",
+		},
+		{
+			"2 * x = 6",
+
+			"x = 3"+"\n",
+		},
+		{
+			"6 = x * 2",
+
+			"x = 3"+"\n",
+		},
+		{
 			"a + b = 10"+"\n"+
 			"a = -4 + 2",
 
 			"b = 12"+"\n"+
 			"a = -2"+"\n",	
-		}
+		},
 	}
 
 	@static arena_buf: [mem.Megabyte]byte
@@ -60,8 +80,8 @@ import test "core:testing"
 	
 		test.expectf(t,
 			output == test_case.expected,
-			"\nEXPECTED:\n%s\nACTUAL:\n%s",
-			test_case.expected, output,
+			"\n\nCASE:\n%s\n\e[0;32mEXPECTED:\e[0m\n%s\e[0;31mACTUAL:\e[0m\n%s",
+			test_case.input, test_case.expected, output,
 		)
 	}
 }

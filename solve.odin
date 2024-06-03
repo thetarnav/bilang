@@ -105,8 +105,8 @@ walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 			new_rhs_op := new(Operation)
 			
 			switch lhs.op {
-			case .Add, .Div:
-				new_rhs_op.op = lhs.op == .Add ? .Sub : .Mul
+			case .Add, .Mul:
+				new_rhs_op.op = lhs.op == .Add ? .Sub : .Div
 
 				if !lhs_lhs_has_deps {
 					new_rhs_op.rhs = lhs.lhs
@@ -115,8 +115,8 @@ walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 					new_rhs_op.rhs = lhs.rhs
 					constr.lhs     = lhs.lhs
 				}
-			case .Sub, .Mul:
-				new_rhs_op.op = lhs.op == .Sub ? .Add : .Div
+			case .Sub, .Div:
+				new_rhs_op.op = lhs.op == .Sub ? .Add : .Mul
 
 				new_rhs_op.rhs = lhs.rhs
 				constr.lhs     = lhs.lhs

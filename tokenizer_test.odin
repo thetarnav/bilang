@@ -202,7 +202,5 @@ test_tokenizer_cases :: proc(t: ^test.T) {
 
 	if failed_count > 0 {
 		test.errorf(t, "\e[0;31mFailed %d cases\e[0m", failed_count)
-	} else {
-		test.logf(t, "\e[0;32mAll cases passed\e[0m")
 	}
 }
