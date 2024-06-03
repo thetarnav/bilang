@@ -17,19 +17,21 @@ import test "core:testing"
 			"a = -4 + 2",
 
 			"b = 12"+"\n"+
-			"a = -2",	
+			"a = -2"+"\n",	
 		}
 	}
 
-	parser_scratch: mem.Scratch_Allocator
-	mem.scratch_allocator_init(&parser_scratch, 1024, context.temp_allocator)
-	scratch_allocator := mem.scratch_allocator(&parser_scratch)
+	@static arena_buf: [mem.Megabyte]byte
+	parser_arena: mem.Arena
+	mem.arena_init(&parser_arena, arena_buf[:])
+	case_allocator := mem.arena_allocator(&parser_arena)
 
+	context.temp_allocator = case_allocator
+	context.allocator = case_allocator
+	
 	for test_case in cases {
-		context.temp_allocator = scratch_allocator
-		context.allocator = scratch_allocator
 
-		defer free_all(scratch_allocator)
+		defer free_all(case_allocator)
 
 
 		decls, err := parse_src(test_case.input)
@@ -43,8 +45,6 @@ import test "core:testing"
 		}
 	
 		constraints := solve(decls)
-
-		fmt.println(constraints)
 	
 		b := strings.builder_make_len_cap(0, 1024)
 		w := strings.to_writer(&b)
