@@ -13,6 +13,11 @@ import test "core:testing"
 		expected: string,
 	}{
 		{
+			"3 - x + 2 = 3",
+
+			"x = 2"+"\n",
+		},
+		{
 			"a + b = 10"+"\n"+
 			"a = -4 + 2",
 
