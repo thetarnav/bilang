@@ -1,7 +1,10 @@
 package bilang
 
 import "core:fmt"
+import "core:log"
+import "core:mem"
 import test "core:testing"
+
 
 Expect_Tokens_Case :: struct {
 	name    : string,
@@ -156,7 +159,10 @@ a - b = 10 * (5 + 15) / 2
 test_only_name: string
 
 @(test)
-test_tokenizer_cases :: proc(t: ^test.T) {
+test_tokenizer_cases :: proc(t: ^test.T)
+{
+	context.allocator = context.temp_allocator
+
 	tokens := make([dynamic]Token, 0, 10)
 
 	failed_count: int
@@ -201,6 +207,6 @@ test_tokenizer_cases :: proc(t: ^test.T) {
 	}
 
 	if failed_count > 0 {
-		test.errorf(t, "\e[0;31mFailed %d cases\e[0m", failed_count)
+		log.errorf("\e[0;31mFailed %d cases\e[0m", failed_count)
 	}
 }

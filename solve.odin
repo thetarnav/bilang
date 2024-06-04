@@ -1,5 +1,7 @@
 package bilang
 
+import "core:fmt"
+
 
 Atom :: union #no_nil {
 	Atom_Num,
@@ -95,7 +97,7 @@ walk_expr :: proc (expr: Expr) -> Atom
 walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 {
 	for &constr, i in constraints {
-		for {
+		loop: for {
 			walk_atom(constr.lhs, i, constraints)
 			walk_atom(constr.rhs, i, constraints)
 	
@@ -107,36 +109,52 @@ walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 			if rhs_has_deps {
 				constr.lhs, constr.rhs = constr.rhs, constr.lhs
 			}
-	
-			lhs := constr.lhs.(Atom_Binary) or_break
-	
-			lhs_lhs_has_deps := has_dependencies(lhs.lhs^)
-			lhs_rhs_has_deps := has_dependencies(lhs.rhs^)
-	
-			if lhs_lhs_has_deps && lhs_rhs_has_deps do break
-	
-			new_rhs_op: Atom_Binary
-			
-			switch lhs.op {
-			case .Add, .Mul:
-				new_rhs_op.op = lhs.op == .Add ? .Sub : .Div
 
-				if !lhs_lhs_has_deps {
-					new_rhs_op.rhs = lhs.lhs
-					constr.lhs     = lhs.rhs
-				} else {
+			switch &lhs in constr.lhs {
+			case Atom_Num:
+				// ignore
+			case Atom_Var:
+				if lhs.mult != 1 {
+					switch &rhs in constr.rhs {
+					case Atom_Num:    rhs.value /= lhs.mult
+					case Atom_Var:    rhs.mult  /= lhs.mult
+					case Atom_Binary: rhs.mult  /= lhs.mult
+					}
+					lhs.mult = 1
+				}
+			case Atom_Binary:
+				lhs_lhs_has_deps := has_dependencies(lhs.lhs^)
+				lhs_rhs_has_deps := has_dependencies(lhs.rhs^)
+		
+				if lhs_lhs_has_deps && lhs_rhs_has_deps do break
+		
+				new_rhs_op: Atom_Binary
+				
+				switch lhs.op {
+				case .Add, .Mul:
+					new_rhs_op.op = lhs.op == .Add ? .Sub : .Div
+	
+					if !lhs_lhs_has_deps {
+						new_rhs_op.rhs = lhs.lhs
+						constr.lhs     = lhs.rhs
+					} else {
+						new_rhs_op.rhs = lhs.rhs
+						constr.lhs     = lhs.lhs
+					}
+				case .Sub, .Div:
+					new_rhs_op.op = lhs.op == .Sub ? .Add : .Mul
+	
 					new_rhs_op.rhs = lhs.rhs
 					constr.lhs     = lhs.lhs
 				}
-			case .Sub, .Div:
-				new_rhs_op.op = lhs.op == .Sub ? .Add : .Mul
+	
+				new_rhs_op.lhs = constr.rhs
+				constr.rhs     = new_atom(new_rhs_op)
 
-				new_rhs_op.rhs = lhs.rhs
-				constr.lhs     = lhs.lhs
+				continue loop
 			}
 
-			new_rhs_op.lhs = constr.rhs
-			constr.rhs     = new_atom(new_rhs_op)
+			break
 		}
 	}
 }
@@ -148,10 +166,10 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 	case Atom_Var:
 		for constr, i in constraints {
 			if i == constr_i do continue
-			if constr.lhs^ == a {
+			if constr.lhs^ == a && a.mult == 1 {
 				atom ^= constr.rhs^
 			}
-			if constr.rhs^ == a {
+			if constr.rhs^ == a && a.mult == 1 {
 				atom ^= constr.lhs^
 			}
 		}
@@ -159,16 +177,70 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 		walk_atom(a.lhs, constr_i, constraints)
 		walk_atom(a.rhs, constr_i, constraints)
 
-		lnum, is_l_num := a.lhs.(Atom_Num)
-		rnum, is_r_num := a.rhs.(Atom_Num)
+		lhs_num, is_lhs_num := a.lhs.(Atom_Num)
+		rhs_num, is_rhs_num := a.rhs.(Atom_Num)
 
-		if is_l_num && is_r_num {
+		if is_lhs_num && is_rhs_num {
 			switch a.op {
-			case .Add: atom ^= Atom_Num{lnum.value + rnum.value}
-			case .Sub: atom ^= Atom_Num{lnum.value - rnum.value}
-			case .Mul: atom ^= Atom_Num{lnum.value * rnum.value}
-			case .Div: atom ^= Atom_Num{lnum.value / rnum.value}
+			case .Add: atom ^= Atom_Num{lhs_num.value + rhs_num.value}
+			case .Sub: atom ^= Atom_Num{lhs_num.value - rhs_num.value}
+			case .Mul: atom ^= Atom_Num{lhs_num.value * rhs_num.value}
+			case .Div: atom ^= Atom_Num{lhs_num.value / rhs_num.value}
 			}
+			break
+		}
+
+		if is_rhs_num {
+			switch a.op {
+			case .Add, .Sub:
+				// handled above, can only be folded if both sides are numbers
+			case .Div:
+				switch &lhs in a.lhs {
+				case Atom_Num:    lhs.value /= rhs_num.value
+				case Atom_Var:    lhs.mult  /= rhs_num.value
+				case Atom_Binary: lhs.mult  /= rhs_num.value
+				}
+				atom ^= a.lhs^
+			case .Mul:
+				switch rhs_num.value {
+				case 1:
+					atom ^= a.lhs^
+				case 0:
+					atom ^= Atom_Num{0}
+				case:
+					switch &lhs in a.lhs {
+					case Atom_Num:    lhs.value *= rhs_num.value
+					case Atom_Var:    lhs.mult  *= rhs_num.value
+					case Atom_Binary: lhs.mult  *= rhs_num.value
+					}
+					atom ^= a.lhs^
+				}
+			}
+			break
+		}
+
+		if is_lhs_num {
+			switch a.op {
+			case .Add, .Sub:
+				// handled above, can only be folded if both sides are numbers
+			case .Div:
+				// cannot be folded here
+			case .Mul:
+				switch lhs_num.value {
+				case 1:
+					atom ^= a.rhs^
+				case 0:
+					atom ^= Atom_Num{0}
+				case:
+					switch &rhs in a.rhs {
+					case Atom_Num:    rhs.value *= lhs_num.value
+					case Atom_Var:    rhs.mult  *= lhs_num.value
+					case Atom_Binary: rhs.mult  *= lhs_num.value
+					}
+					atom ^= a.rhs^
+				}
+			}
+			break
 		}
 	}
 }

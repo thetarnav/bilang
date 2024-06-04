@@ -3,6 +3,7 @@ package bilang
 import "core:strings"
 import "core:fmt"
 import "core:mem"
+import "core:log"
 import test "core:testing"
 
 
@@ -78,7 +79,7 @@ import test "core:testing"
 		decls, err := parse_src(test_case.input)
 		
 		if err != nil {
-			test.errorf(t,
+			log.errorf(
 				"\nFailed to parse input:\n%s",
 				parser_error_to_string(test_case.input, err),
 			)
@@ -106,7 +107,7 @@ import test "core:testing"
 			write_decls(w, decls)
 			decls_pretty := strings.clone(strings.to_string(b))
 
-			test.errorf(t,
+			log.errorf(
 				"\n\nCASE:\n%s\nPARSED:\n%s\e[0;32mEXPECTED:\e[0m\n%s\e[0;31mACTUAL:\e[0m\n%s",
 				test_case.input, decls_pretty, test_case.solve, output_pretty,
 			)
