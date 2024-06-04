@@ -114,14 +114,17 @@ walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 			case Atom_Num:
 				// ignore
 			case Atom_Var:
-				if lhs.mult != 1 {
-					switch &rhs in constr.rhs {
-					case Atom_Num:    rhs.value /= lhs.mult
-					case Atom_Var:    rhs.mult  /= lhs.mult
-					case Atom_Binary: rhs.mult  /= lhs.mult
-					}
-					lhs.mult = 1
+				if lhs.mult == 1 do break
+				
+				switch &rhs in constr.rhs {
+				case Atom_Num:    rhs.value /= lhs.mult
+				case Atom_Var:    rhs.mult  /= lhs.mult
+				case Atom_Binary: rhs.mult  /= lhs.mult
 				}
+				lhs.mult = 1
+
+				continue loop
+				
 			case Atom_Binary:
 				lhs_lhs_has_deps := has_dependencies(lhs.lhs^)
 				lhs_rhs_has_deps := has_dependencies(lhs.rhs^)
