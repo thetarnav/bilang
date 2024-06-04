@@ -38,7 +38,7 @@ new_atom :: proc (atom: Atom) -> ^Atom
 }
 
 @(require_results)
-solve :: proc (decls: []^Decl, allocator := context.allocator) -> []Constraint
+solve :: proc (decls: []Decl, allocator := context.allocator) -> []Constraint
 {
 	context.allocator = allocator
 

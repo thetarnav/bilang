@@ -136,9 +136,9 @@ parser_curr_token_expect :: proc(
 parse_src :: proc (
 	src: string,
 	allocator := context.allocator,
-) -> (res: []^Decl, err: Parse_Error)
+) -> (res: []Decl, err: Parse_Error)
 {
-	decls := make([dynamic]^Decl, 0, 16, allocator) or_return
+	decls := make([dynamic]Decl, 0, 16, allocator) or_return
 	defer shrink(&decls)
 
 	p: Parser = {
@@ -165,10 +165,8 @@ parse_src :: proc (
 	return
 }
 
-parse_decl :: proc (p: ^Parser) -> (decl: ^Decl, err: Parse_Error)
+parse_decl :: proc (p: ^Parser) -> (decl: Decl, err: Parse_Error)
 {
-	decl = new(Decl, p.allocator) or_return
-
 	decl.lhs = parse_expr(p) or_return
 	
 	parser_curr_token_expect(p, .Eq) or_return

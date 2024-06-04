@@ -31,24 +31,24 @@ AST
 */
 
 
-print_decls :: proc (decls: []^Decl, highlight := true, fd := os.stdout)
+print_decls :: proc (decls: []Decl, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
 	write_decls(w^, decls, highlight)
 }
-write_decls :: proc (w: io.Writer, decls: []^Decl, highlight := true)
+write_decls :: proc (w: io.Writer, decls: []Decl, highlight := true)
 {
 	for decl in decls {
 		write_decl(w, decl, highlight)
 	}
 }
 
-print_decl :: proc (decl: ^Decl, highlight := true, fd := os.stdout)
+print_decl :: proc (decl: Decl, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
 	write_decl(w^, decl, highlight)
 }
-write_decl :: proc (w: io.Writer, decl: ^Decl, highlight := true)
+write_decl :: proc (w: io.Writer, decl: Decl, highlight := true)
 {
 	write_expr(w, decl.lhs, highlight)
 	fmt.wprint(w, " ")
