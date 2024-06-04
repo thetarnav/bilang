@@ -12,29 +12,29 @@ Decl :: struct {
 }
 
 Expr :: union {
-	^Ident,
-	^Number,
-	^Unary,
-	^Binary,
+	^Expr_Ident,
+	^Expr_Number,
+	^Expr_Unary,
+	^Expr_Binary,
 }
 
-Ident :: struct {
+Expr_Ident :: struct {
 	token: Token,
 	name : string,
 }
 
-Number :: struct {
+Expr_Number :: struct {
 	token: Token,
-	value: f32,
+	value: f64,
 }
 
-Unary :: struct {
+Expr_Unary :: struct {
 	op      : Unary_Op,
 	op_token: Token,
 	rhs     : Expr,
 }
 
-Binary :: struct {
+Expr_Binary :: struct {
 	lhs     : Expr,
 	op      : Binary_Op,
 	op_token: Token,
@@ -201,41 +201,41 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) #no_bounds_che
 	binary_block: {
 		op := token_to_binary_op(p.token.kind) or_break binary_block
 	
-		binary := new(Binary, p.allocator) or_return
+		bin := new(Expr_Binary, p.allocator) or_return
 	
-		binary.op       = op
-		binary.op_token = p.token
-		binary.lhs      = expr
+		bin.op       = op
+		bin.op_token = p.token
+		bin.lhs      = expr
 	
 		parser_next_token(p)
-		binary.rhs = parse_expr_atom(p) or_return
+		bin.rhs = parse_expr_atom(p) or_return
 	
-		binary_last := binary
-		op_last     := op
+		bin_last := bin
+		op_last  := op
 		
-		expr = binary
+		expr = bin
 	
 		for {
 			op = token_to_binary_op(p.token.kind) or_break binary_block
 	
-			binary = new(Binary, p.allocator) or_return
+			bin = new(Expr_Binary, p.allocator) or_return
 	
-			binary.op       = op
-			binary.op_token = p.token
+			bin.op       = op
+			bin.op_token = p.token
 	
 			parser_next_token(p)
-			binary.rhs = parse_expr_atom(p) or_return
+			bin.rhs = parse_expr_atom(p) or_return
 	
 			if precedence_table[op_last] >= precedence_table[op] {
-				binary.lhs = expr
-				expr       = binary
+				bin.lhs = expr
+				expr    = bin
 			} else {
-				binary.lhs      = binary_last.rhs
-				binary_last.rhs = binary
+				bin.lhs      = bin_last.rhs
+				bin_last.rhs = bin
 			}
 			
-			binary_last = binary
-			op_last     = op
+			bin_last = bin
+			op_last  = op
 		}
 	}
 
@@ -273,7 +273,7 @@ parse_paren :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error)
 }
 
 @(require_results)
-parse_unary :: proc (p: ^Parser) -> (unary: ^Unary, err: Parse_Error)
+parse_unary :: proc (p: ^Parser) -> (unary: ^Expr_Unary, err: Parse_Error)
 {
 	op: Unary_Op
 
@@ -283,7 +283,7 @@ parse_unary :: proc (p: ^Parser) -> (unary: ^Unary, err: Parse_Error)
 	case: unreachable()
 	}
 
-	unary = new(Unary, p.allocator) or_return
+	unary = new(Expr_Unary, p.allocator) or_return
 
 	unary.op = op
 	unary.op_token = p.token
@@ -295,11 +295,11 @@ parse_unary :: proc (p: ^Parser) -> (unary: ^Unary, err: Parse_Error)
 }
 
 @(require_results)
-parse_ident :: proc (p: ^Parser) -> (ident: ^Ident, err: Parse_Error)
+parse_ident :: proc (p: ^Parser) -> (ident: ^Expr_Ident, err: Parse_Error)
 {
 	assert(p.token.kind == .Ident)
 
-	ident = new(Ident, p.allocator) or_return
+	ident = new(Expr_Ident, p.allocator) or_return
 	ident.name = token_string(p.src, p.token)
 	ident.token = p.token
 
@@ -309,13 +309,13 @@ parse_ident :: proc (p: ^Parser) -> (ident: ^Ident, err: Parse_Error)
 }
 
 @(require_results)
-parse_number :: proc (p: ^Parser) -> (number: ^Number, err: Parse_Error)
+parse_number :: proc (p: ^Parser) -> (number: ^Expr_Number, err: Parse_Error)
 {
 	assert(p.token.kind == .Num)
 
-	number = new(Number, p.allocator) or_return
+	number = new(Expr_Number, p.allocator) or_return
 	
-	value, ok := strconv.parse_f32(token_string(p.src, p.token))
+	value, ok := strconv.parse_f64(token_string(p.src, p.token))
 	if !ok {
 		err = Invalid_Number_Literal_Error{p.token}
 	}

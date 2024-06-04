@@ -2,22 +2,40 @@ package bilang
 
 
 Atom :: union #no_nil {
-	f32,
-	string,
-	^Operation,
+	Atom_Num,
+	Atom_Var,
+	Atom_Binary,
 }
 
-Operation :: struct {
-	lhs: Atom,
-	op:  Binary_Op,
-	rhs: Atom,
+Atom_Num :: struct {
+	value: f64,
+}
+
+Atom_Var :: struct {
+	name: string,
+	mult: f64,
+}
+
+Atom_Binary :: struct {
+	lhs:  ^Atom,
+	op:   Binary_Op,
+	rhs:  ^Atom,
+	mult: f64,
 }
 
 Constraint :: struct {
-	lhs: Atom,
-	rhs: Atom,
+	lhs: ^Atom,
+	rhs: ^Atom,
 }
 
+
+@(require_results)
+new_atom :: proc (atom: Atom) -> ^Atom
+{
+	a := new(Atom)
+	a ^= atom
+	return a
+}
 
 @(require_results)
 solve :: proc (decls: []^Decl, allocator := context.allocator) -> []Constraint
@@ -28,8 +46,8 @@ solve :: proc (decls: []^Decl, allocator := context.allocator) -> []Constraint
 
 	for decl in decls {
 		constraint: Constraint
-		constraint.lhs = walk_expr(decl.lhs)
-		constraint.rhs = walk_expr(decl.rhs)
+		constraint.lhs = new_atom(walk_expr(decl.lhs))
+		constraint.rhs = new_atom(walk_expr(decl.rhs))
 		append(&constraints, constraint)
 	}
 
@@ -40,54 +58,49 @@ solve :: proc (decls: []^Decl, allocator := context.allocator) -> []Constraint
 
 walk_expr :: proc (expr: Expr) -> Atom
 {
-	op: Operation
-
 	switch v in expr {
-	case ^Ident:
-		return v.name
-	case ^Number:
-		return v.value
-	case ^Binary:
-		op.lhs = walk_expr(v.lhs)
-		op.rhs = walk_expr(v.rhs)
-		op.op = v.op
-	case ^Unary:
+	case ^Expr_Ident:
+		return Atom_Var{
+			name = v.name,
+			mult = 1,
+		}
+	case ^Expr_Number:
+		return Atom_Num{
+			value = v.value,
+		}
+	case ^Expr_Binary:
+		return Atom_Binary{
+			lhs  = new_atom(walk_expr(v.lhs)),
+			op   = v.op,
+			rhs  = new_atom(walk_expr(v.rhs)),
+			mult = 1,
+		}
+	case ^Expr_Unary:
 		switch v.op {
 		case .Neg:
-			op.rhs = walk_expr(v.rhs)
-			op.op = .Sub
+			return Atom_Binary{
+				lhs  = new_atom(Atom_Num{}),
+				op   = .Sub,
+				rhs  = new_atom(walk_expr(v.rhs)),
+				mult = 1,
+			}
 		case .Pos:
 			return walk_expr(v.rhs)
 		}
 	}
 
-	lnum, is_l_num := op.lhs.(f32)
-	rnum, is_r_num := op.rhs.(f32)
-
-	if is_l_num && is_r_num {
-		switch op.op {
-		case .Add: return lnum + rnum
-		case .Sub: return lnum - rnum
-		case .Mul: return lnum * rnum
-		case .Div: return lnum / rnum
-		}
-	}
-
-	op_ptr := new(Operation)
-	op_ptr ^= op
-
-	return op_ptr
+	return Atom_Num{}
 }
 
 walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 {
 	for &constr, i in constraints {
 		for {
-			constr.lhs = walk_atom(constr.lhs, i, constraints)
-			constr.rhs = walk_atom(constr.rhs, i, constraints)
+			walk_atom(constr.lhs, i, constraints)
+			walk_atom(constr.rhs, i, constraints)
 	
-			lhs_has_deps := has_dependencies(constr.lhs)
-			rhs_has_deps := has_dependencies(constr.rhs)
+			lhs_has_deps := has_dependencies(constr.lhs^)
+			rhs_has_deps := has_dependencies(constr.rhs^)
 	
 			if lhs_has_deps && rhs_has_deps do break
 	
@@ -95,14 +108,14 @@ walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 				constr.lhs, constr.rhs = constr.rhs, constr.lhs
 			}
 	
-			lhs := constr.lhs.(^Operation) or_break
+			lhs := constr.lhs.(Atom_Binary) or_break
 	
-			lhs_lhs_has_deps := has_dependencies(lhs.lhs)
-			lhs_rhs_has_deps := has_dependencies(lhs.rhs)
+			lhs_lhs_has_deps := has_dependencies(lhs.lhs^)
+			lhs_rhs_has_deps := has_dependencies(lhs.rhs^)
 	
 			if lhs_lhs_has_deps && lhs_rhs_has_deps do break
 	
-			new_rhs_op := new(Operation)
+			new_rhs_op: Atom_Binary
 			
 			switch lhs.op {
 			case .Add, .Mul:
@@ -123,52 +136,52 @@ walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 			}
 
 			new_rhs_op.lhs = constr.rhs
-			constr.rhs     = new_rhs_op
+			constr.rhs     = new_atom(new_rhs_op)
 		}
 	}
 }
 
-walk_atom :: proc (atom: Atom, constr_i: int, constraints: ^[dynamic]Constraint) -> Atom
+walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint)
 {
 	switch a in atom {
-	case f32:
-	case string:
+	case Atom_Num:
+	case Atom_Var:
 		for constr, i in constraints {
 			if i == constr_i do continue
-			if constr.lhs == a {
-				return constr.rhs
+			if constr.lhs^ == a {
+				atom ^= constr.rhs^
 			}
-			if constr.rhs == a {
-				return constr.lhs
+			if constr.rhs^ == a {
+				atom ^= constr.lhs^
 			}
 		}
-	case ^Operation:
-		a.lhs = walk_atom(a.lhs, constr_i, constraints)
-		a.rhs = walk_atom(a.rhs, constr_i, constraints)
+	case Atom_Binary:
+		walk_atom(a.lhs, constr_i, constraints)
+		walk_atom(a.rhs, constr_i, constraints)
 
-		lnum, is_l_num := a.lhs.(f32)
-		rnum, is_r_num := a.rhs.(f32)
+		lnum, is_l_num := a.lhs.(Atom_Num)
+		rnum, is_r_num := a.rhs.(Atom_Num)
 
 		if is_l_num && is_r_num {
 			switch a.op {
-			case .Add: return lnum + rnum
-			case .Sub: return lnum - rnum
-			case .Mul: return lnum * rnum
-			case .Div: return lnum / rnum
+			case .Add: atom ^= Atom_Num{lnum.value + rnum.value}
+			case .Sub: atom ^= Atom_Num{lnum.value - rnum.value}
+			case .Mul: atom ^= Atom_Num{lnum.value * rnum.value}
+			case .Div: atom ^= Atom_Num{lnum.value / rnum.value}
 			}
 		}
 	}
-	return atom
 }
 
 has_dependencies :: proc (atom: Atom) -> bool
 {
 	switch a in atom {
-	case f32:
-	case string:
+	case Atom_Num:
+		return false
+	case Atom_Var:
 		return true
-	case ^Operation:
-		return has_dependencies(a.lhs) || has_dependencies(a.rhs)
+	case Atom_Binary:
+		return has_dependencies(a.lhs^) || has_dependencies(a.rhs^)
 	}
 	return false
 }

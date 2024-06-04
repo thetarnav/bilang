@@ -68,21 +68,21 @@ print_expr :: proc (expr: Expr, highlight := true, fd := os.stdout)
 write_expr :: proc (w: io.Writer, expr: Expr, highlight := true)
 {
 	switch v in expr {
-	case ^Binary: write_binary(w, v, highlight)
-	case ^Unary:  write_unary (w, v, highlight)
-	case ^Ident:  write_ident (w, v, highlight)
-	case ^Number: write_number(w, v, highlight)
+	case ^Expr_Binary: write_binary(w, v, highlight)
+	case ^Expr_Unary:  write_unary (w, v, highlight)
+	case ^Expr_Ident:  write_ident (w, v, highlight)
+	case ^Expr_Number: write_number(w, v, highlight)
 	}
 
 	return
 }
 
-print_binary :: proc (binary: ^Binary, highlight := true, fd := os.stdout)
+print_binary :: proc (binary: ^Expr_Binary, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
 	write_binary(w^, binary, highlight)
 }
-write_binary :: proc (w: io.Writer, binary: ^Binary, highlight := true)
+write_binary :: proc (w: io.Writer, binary: ^Expr_Binary, highlight := true)
 {
 	if highlight do fmt.wprint(w, "\e[38;5;240m")
 	fmt.wprint(w, "(")
@@ -106,12 +106,12 @@ write_binary :: proc (w: io.Writer, binary: ^Binary, highlight := true)
 	if highlight do fmt.wprint(w, "\e[0m")
 }
 
-print_unary :: proc (unary: ^Unary, highlight := true, fd := os.stdout)
+print_unary :: proc (unary: ^Expr_Unary, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
 	write_unary(w^, unary, highlight)
 }
-write_unary :: proc (w: io.Writer, unary: ^Unary, highlight := true)
+write_unary :: proc (w: io.Writer, unary: ^Expr_Unary, highlight := true)
 {	
 	if highlight do fmt.wprint(w, "\e[38;5;240m")
 	fmt.wprint(w, "(")
@@ -131,22 +131,22 @@ write_unary :: proc (w: io.Writer, unary: ^Unary, highlight := true)
 	if highlight do fmt.wprint(w, "\e[0m")
 }
 
-print_ident :: proc (ident: ^Ident, highlight := true, fd := os.stdout)
+print_ident :: proc (ident: ^Expr_Ident, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
 	write_ident(w^, ident, highlight)
 }
-write_ident :: proc (w: io.Writer, ident: ^Ident, highlight := true)
+write_ident :: proc (w: io.Writer, ident: ^Expr_Ident, highlight := true)
 {
 	fmt.wprint(w, ident.name)
 }
 
-print_number :: proc (number: ^Number, highlight := true, fd := os.stdout)
+print_number :: proc (number: ^Expr_Number, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
 	write_number(w^, number, highlight)
 }
-write_number :: proc (w: io.Writer, number: ^Number, highlight := true)
+write_number :: proc (w: io.Writer, number: ^Expr_Number, highlight := true)
 {
 	if highlight do fmt.wprint(w, "\e[0;33m")
 	fmt.wprint(w, number.value)
@@ -169,13 +169,13 @@ print_contraints :: proc (constraints: []Constraint, highlight := true, fd := os
 write_contraints :: proc (w: io.Writer, constraints: []Constraint, highlight := true)
 {
 	for constr in constraints {
-		write_atom(w, constr.lhs, highlight)
+		write_atom(w, constr.lhs^, highlight)
 
 		if highlight do fmt.wprint(w, "\e[0;36m")
 		fmt.wprint(w, " = ")
 		if highlight do fmt.wprint(w, "\e[0m")
 
-		write_atom(w, constr.rhs, highlight)
+		write_atom(w, constr.rhs^, highlight)
 
 		fmt.wprint(w, "\n")
 	}
@@ -189,13 +189,13 @@ print_atom :: proc (atom: Atom, highlight := true, fd := os.stdout)
 write_atom :: proc (w: io.Writer, atom: Atom, highlight := true)
 {
 	switch a in atom {
-	case f32:
+	case Atom_Num:
 		if highlight do fmt.wprint(w, "\e[0;33m")
-		fmt.wprint(w, a)
+		fmt.wprint(w, a.value)
 		if highlight do fmt.wprint(w, "\e[0m")
-	case string:
-		fmt.wprint(w, a)
-	case ^Operation:
+	case Atom_Var:
+		fmt.wprint(w, a.name)
+	case Atom_Binary:
 		if highlight do fmt.wprint(w, "\e[38;5;240m")
 		fmt.wprint(w, "(")
 		if highlight do fmt.wprint(w, "\e[0m")
@@ -209,11 +209,11 @@ write_atom :: proc (w: io.Writer, atom: Atom, highlight := true)
 		}
 		if highlight do fmt.wprint(w, "\e[0m")
 
-		write_atom(w, a.lhs, highlight)
+		write_atom(w, a.lhs^, highlight)
 
 		fmt.wprint(w, " ")
 
-		write_atom(w, a.rhs, highlight)
+		write_atom(w, a.rhs^, highlight)
 
 		if highlight do fmt.wprint(w, "\e[38;5;240m")
 		fmt.wprint(w, ")")
