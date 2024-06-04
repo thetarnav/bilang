@@ -1,6 +1,7 @@
 package bilang
 
 import "core:fmt"
+import "core:log"
 
 
 Atom :: union #no_nil {
@@ -124,35 +125,38 @@ walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 				lhs.mult = 1
 
 				continue loop
-				
+
 			case Atom_Binary:
-				lhs_lhs_has_deps := has_dependencies(lhs.lhs^)
-				lhs_rhs_has_deps := has_dependencies(lhs.rhs^)
-		
-				if lhs_lhs_has_deps && lhs_rhs_has_deps do break
-		
-				new_rhs_op: Atom_Binary
+				new_bin: Atom_Binary
+				new_bin.mult = 1
 				
 				switch lhs.op {
 				case .Add, .Mul:
-					new_rhs_op.op = lhs.op == .Add ? .Sub : .Div
-	
-					if !lhs_lhs_has_deps {
-						new_rhs_op.rhs = lhs.lhs
-						constr.lhs     = lhs.rhs
-					} else {
-						new_rhs_op.rhs = lhs.rhs
-						constr.lhs     = lhs.lhs
+					new_bin.op = lhs.op == .Add ? .Sub : .Div
+
+					if !has_dependencies(lhs.lhs^)
+					{
+						new_bin.rhs = lhs.lhs
+						constr.lhs  = lhs.rhs
 					}
+					else if !has_dependencies(lhs.rhs^)
+					{
+						new_bin.rhs = lhs.rhs
+						constr.lhs  = lhs.lhs
+					}
+					else do break loop
+					
 				case .Sub, .Div:
-					new_rhs_op.op = lhs.op == .Sub ? .Add : .Mul
+					new_bin.op = lhs.op == .Sub ? .Add : .Mul
 	
-					new_rhs_op.rhs = lhs.rhs
-					constr.lhs     = lhs.lhs
+					new_bin.rhs = lhs.rhs
+					constr.lhs  = lhs.lhs
+					new_bin.lhs = constr.rhs
 				}
 	
-				new_rhs_op.lhs = constr.rhs
-				constr.rhs     = new_atom(new_rhs_op)
+				new_bin.lhs = constr.rhs
+				constr.rhs  = new_atom(new_bin)
+
 
 				continue loop
 			}

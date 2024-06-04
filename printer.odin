@@ -194,15 +194,20 @@ write_atom :: proc (w: io.Writer, atom: Atom, highlight := true)
 		fmt.wprint(w, a.value)
 		if highlight do fmt.wprint(w, "\e[0m")
 	case Atom_Var:
-		if a.mult == 1 {
-			fmt.wprint(w, a.name)
-		} else {
+		if a.mult != 1 {
 			if highlight do fmt.wprint(w, "\e[0;33m")
 			fmt.wprint(w, a.mult)
 			if highlight do fmt.wprint(w, "\e[0m")
-			fmt.wprint(w, a.name)
 		}
+		
+		fmt.wprint(w, a.name)
 	case Atom_Binary:
+		if a.mult != 1 {
+			if highlight do fmt.wprint(w, "\e[0;33m")
+			fmt.wprint(w, a.mult)
+			if highlight do fmt.wprint(w, "\e[0m")
+		}
+
 		if highlight do fmt.wprint(w, "\e[38;5;240m")
 		fmt.wprint(w, "(")
 		if highlight do fmt.wprint(w, "\e[0m")
