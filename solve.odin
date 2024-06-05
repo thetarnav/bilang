@@ -1,8 +1,5 @@
 package bilang
 
-import "core:fmt"
-import "core:log"
-
 
 Atom :: union #no_nil {
 	Atom_Num,
@@ -10,26 +7,40 @@ Atom :: union #no_nil {
 	Atom_Binary,
 }
 
+Fraction :: struct {
+	num: f64,
+	den: f64,
+}
+
 Atom_Num :: struct {
-	value: f64,
+	using f: Fraction,
 }
 
 Atom_Var :: struct {
+	using f: Fraction,
 	name: string,
-	mult: f64,
 }
 
 Atom_Binary :: struct {
+	using f: Fraction,
 	lhs:  ^Atom,
-	op:   Binary_Op,
+	op:   Atom_Binary_Op,
 	rhs:  ^Atom,
-	mult: f64,
+}
+
+Atom_Binary_Op :: enum {
+	Add,
+	Mul,
+	Div,
 }
 
 Constraint :: struct {
 	lhs: ^Atom,
 	rhs: ^Atom,
 }
+
+FRACTION_IDENTITY: Fraction : {1, 1}
+FRACTION_ZERO    : Fraction : {0, 1}
 
 
 @(require_results)
@@ -65,28 +76,39 @@ walk_expr :: proc (expr: Expr) -> Atom
 	case ^Expr_Ident:
 		return Atom_Var{
 			name = v.name,
-			mult = 1,
+			f    = FRACTION_IDENTITY,
 		}
 	case ^Expr_Number:
 		return Atom_Num{
-			value = v.value,
+			num = v.value,
+			den = 1,
 		}
 	case ^Expr_Binary:
-		return Atom_Binary{
-			lhs  = new_atom(walk_expr(v.lhs)),
-			op   = v.op,
-			rhs  = new_atom(walk_expr(v.rhs)),
-			mult = 1,
+		bin := Atom_Binary{
+			lhs = new_atom(walk_expr(v.lhs)),
+			rhs = new_atom(walk_expr(v.rhs)),
+			f   = FRACTION_IDENTITY,
 		}
+		
+		switch v.op {
+		case .Add:
+			bin.op = .Add
+		case .Sub:
+			bin.op = .Add
+			atom_neg(bin.rhs)
+		case .Mul:
+			bin.op = .Mul
+		case .Div:
+			bin.op = .Div
+		}
+
+		return bin
 	case ^Expr_Unary:
 		switch v.op {
 		case .Neg:
-			return Atom_Binary{
-				lhs  = new_atom(Atom_Num{}),
-				op   = .Sub,
-				rhs  = new_atom(walk_expr(v.rhs)),
-				mult = 1,
-			}
+			rhs := walk_expr(v.rhs)
+			atom_neg(&rhs)
+			return rhs
 		case .Pos:
 			return walk_expr(v.rhs)
 		}
@@ -123,20 +145,20 @@ walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 							switch {
 							case lhs_lhs_has_deps && rhs_lhs_has_deps:
 								lhs.rhs, rhs.lhs = rhs.lhs, lhs.rhs
-								atom_mult(lhs.rhs, -1)
-								atom_mult(rhs.lhs, -1)
+								atom_neg(lhs.rhs)
+								atom_neg(rhs.lhs)
 							case lhs_lhs_has_deps:
 								lhs.rhs, rhs.rhs = rhs.rhs, lhs.rhs
-								atom_mult(lhs.rhs, -1)
-								atom_mult(rhs.rhs, -1)
+								atom_neg(lhs.rhs)
+								atom_neg(rhs.rhs)
 							case rhs_lhs_has_deps:
 								lhs.lhs, rhs.lhs = rhs.lhs, lhs.lhs
-								atom_mult(lhs.lhs, -1)
-								atom_mult(rhs.lhs, -1)
+								atom_neg(lhs.lhs)
+								atom_neg(rhs.lhs)
 							case:
 								lhs.lhs, rhs.rhs = rhs.rhs, lhs.lhs
-								atom_mult(lhs.lhs, -1)
-								atom_mult(rhs.rhs, -1)
+								atom_neg(lhs.lhs)
+								atom_neg(rhs.rhs)
 							}
 
 							continue loop
@@ -156,10 +178,10 @@ walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 			case Atom_Num:
 				// ignore
 			case Atom_Var:
-				if lhs.mult == 1 do break
+				if lhs.f == FRACTION_IDENTITY do break
 				
-				atom_mult(constr.rhs, 1 / lhs.mult)
-				lhs.mult = 1
+				atom_div(constr.rhs, lhs.f)
+				lhs.f = FRACTION_IDENTITY
 
 				continue loop
 
@@ -168,27 +190,36 @@ walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 				flatten_mult(&lhs)
 
 				new_bin: Atom_Binary
-				new_bin.mult = 1
-				
-				switch lhs.op {
-				case .Add, .Mul:
-					new_bin.op = lhs.op == .Add ? .Sub : .Div
+				new_bin.f = FRACTION_IDENTITY
 
-					if !has_dependencies(lhs.lhs^)
-					{
+				switch lhs.op {
+				case .Add:
+					new_bin.op = .Add
+					switch {
+					case !has_dependencies(lhs.lhs^):
 						new_bin.rhs = lhs.lhs
 						constr.lhs  = lhs.rhs
-					}
-					else if !has_dependencies(lhs.rhs^)
-					{
+					case !has_dependencies(lhs.rhs^):
 						new_bin.rhs = lhs.rhs
 						constr.lhs  = lhs.lhs
+					case:
+						break loop
 					}
-					else do break loop
-					
-				case .Sub, .Div:
-					new_bin.op = lhs.op == .Sub ? .Add : .Mul
-	
+					atom_neg(new_bin.rhs)
+				case .Mul:
+					new_bin.op = .Div
+					switch {
+					case !has_dependencies(lhs.lhs^):
+						new_bin.rhs = lhs.lhs
+						constr.lhs  = lhs.rhs
+					case !has_dependencies(lhs.rhs^):
+						new_bin.rhs = lhs.rhs
+						constr.lhs  = lhs.lhs
+					case:
+						break loop
+					}
+				case .Div:
+					new_bin.op  = .Mul
 					new_bin.rhs = lhs.rhs
 					constr.lhs  = lhs.lhs
 				}
@@ -208,100 +239,158 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 {
 	switch &a in atom {
 	case Atom_Num:
+		// a.num /= a.den
 	case Atom_Var:
 		for constr, i in constraints {
 			if i == constr_i do continue
-			if constr.lhs^ == a && a.mult == 1 {
-				atom ^= constr.rhs^
+			if constr.lhs^ == a && a.f == FRACTION_IDENTITY {
+				walk_atom(constr.rhs, i, constraints)
+				atom ^= atom_copy(constr.rhs^)
 			}
-			if constr.rhs^ == a && a.mult == 1 {
-				atom ^= constr.lhs^
+			if constr.rhs^ == a && a.f == FRACTION_IDENTITY {
+				walk_atom(constr.lhs, i, constraints)
+				atom ^= atom_copy(constr.lhs^)
 			}
 		}
 	case Atom_Binary:
 		walk_atom(a.lhs, constr_i, constraints)
 		walk_atom(a.rhs, constr_i, constraints)
 
+		// fold multipliers
+		flatten_mult(&a)
+
 		lhs_num, is_lhs_num := a.lhs.(Atom_Num)
 		rhs_num, is_rhs_num := a.rhs.(Atom_Num)
 
 		if is_lhs_num && is_rhs_num {
 			switch a.op {
-			case .Add: atom ^= Atom_Num{lhs_num.value + rhs_num.value}
-			case .Sub: atom ^= Atom_Num{lhs_num.value - rhs_num.value}
-			case .Mul: atom ^= Atom_Num{lhs_num.value * rhs_num.value}
-			case .Div: atom ^= Atom_Num{lhs_num.value / rhs_num.value}
+			case .Add: atom ^= Atom_Num{Fraction{lhs_num.num * rhs_num.den + rhs_num.num * lhs_num.den, lhs_num.den * rhs_num.den}}
+			case .Mul: atom ^= Atom_Num{Fraction{lhs_num.num * rhs_num.num, lhs_num.den * rhs_num.den}}
+			case .Div: atom ^= Atom_Num{Fraction{lhs_num.num * rhs_num.den, lhs_num.den * rhs_num.num}}
 			}
 			break
 		}
 
-		// fold multipliers
-		flatten_mult(&a)
-
 		if is_rhs_num {
 			switch a.op {
-			case .Add, .Sub:
+			case .Add:
 				// handled above, can only be folded if both sides are numbers
 			case .Div:
-				atom_mult(a.lhs, 1 / rhs_num.value)
+				atom_div(a.lhs, rhs_num)
 				atom ^= a.lhs^
 			case .Mul:
-				switch rhs_num.value {
-				case 1:
-					atom ^= a.lhs^
-				case 0:
-					atom ^= Atom_Num{0}
-				case:
-					atom_mult(a.lhs, rhs_num.value)
-					atom ^= a.lhs^
-				}
+				atom_mult(a.lhs, rhs_num)
+				atom ^= a.lhs^
 			}
 			break
 		}
 
 		if is_lhs_num {
 			switch a.op {
-			case .Add, .Sub:
+			case .Add:
 				// handled above, can only be folded if both sides are numbers
 			case .Div:
 				// cannot be folded here
 			case .Mul:
-				switch lhs_num.value {
-				case 1:
-					atom ^= a.rhs^
-				case 0:
-					atom ^= Atom_Num{0}
-				case:
-					atom_mult(a.rhs, lhs_num.value)
-					atom ^= a.rhs^
-				}
+				atom_mult(a.rhs, lhs_num)
+				atom ^= a.rhs^
 			}
 			break
 		}
 	}
 }
 
-atom_mult :: proc (atom: ^Atom, mult: f64)
+atom_copy :: proc (src: Atom) -> Atom
+{
+	switch s in src {
+	case Atom_Num: return s
+	case Atom_Var: return s
+	case Atom_Binary:
+		a := s
+		a.lhs = new_atom(atom_copy(s.lhs^))
+		a.rhs = new_atom(atom_copy(s.rhs^))
+		return a
+	}
+	return {}
+}
+
+atom_mult :: proc (atom: ^Atom, f: Fraction)
+{
+	switch f {
+	case FRACTION_ZERO:
+		atom ^= Atom_Num{FRACTION_ZERO}
+	case FRACTION_IDENTITY:
+		return
+	case:
+		switch &a in atom {
+		case Atom_Num:
+			a.num *= f.num
+			a.den *= f.den
+		case Atom_Var:
+			a.num *= f.num
+			a.den *= f.den
+		case Atom_Binary:
+			a.num *= f.num
+			a.den *= f.den
+		}
+	}
+}
+
+atom_div :: proc (atom: ^Atom, f: Fraction)
+{
+	switch f {
+	case FRACTION_ZERO:
+		panic("division by zero")
+	case FRACTION_IDENTITY:
+		return
+	case:
+		switch &a in atom {
+		case Atom_Num:
+			a.num *= f.den
+			a.den *= f.num
+		case Atom_Var:
+			a.num *= f.den
+			a.den *= f.num
+		case Atom_Binary:
+			a.num *= f.den
+			a.den *= f.num
+		}
+	}
+}
+
+atom_neg :: proc (atom: ^Atom)
 {
 	switch &a in atom {
-	case Atom_Num:    a.value *= mult
-	case Atom_Var:    a.mult  *= mult
-	case Atom_Binary: a.mult  *= mult
+	case Atom_Num:    a.num = -a.num
+	case Atom_Var:    a.num = -a.num
+	case Atom_Binary: a.num = -a.num
+	}
+}
+
+atom_invert :: proc (atom: ^Atom)
+{
+	switch &a in atom {
+	case Atom_Num:    a.den, a.num = a.num, a.den
+	case Atom_Var:    a.den, a.num = a.num, a.den
+	case Atom_Binary: a.den, a.num = a.num, a.den
 	}
 }
 
 flatten_mult :: proc (bin: ^Atom_Binary) {
-	if bin.mult == 1 do return
+	if bin.f == FRACTION_IDENTITY do return
 
 	switch bin.op {
-	case .Add, .Sub:
-		atom_mult(bin.lhs, bin.mult)
-		atom_mult(bin.rhs, bin.mult)
-	case .Mul, .Div:
-		atom_mult(bin.lhs, bin.mult)
+	case .Add:
+		atom_mult(bin.lhs, bin)
+		atom_mult(bin.rhs, bin)
+	case .Mul:
+		atom_mult(bin.lhs, bin)
+	case .Div:
+		atom_mult(bin.lhs, {bin.num, 1})
+		atom_mult(bin.rhs, {1, bin.den})
 	}
 
-	bin.mult = 1
+	bin.f = FRACTION_IDENTITY
 }
 
 has_dependencies :: proc (atom: Atom) -> bool

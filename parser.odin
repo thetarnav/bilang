@@ -29,31 +29,31 @@ Expr_Number :: struct {
 }
 
 Expr_Unary :: struct {
-	op      : Unary_Op,
+	op      : Expr_Unary_Op,
 	op_token: Token,
 	rhs     : Expr,
 }
 
 Expr_Binary :: struct {
 	lhs     : Expr,
-	op      : Binary_Op,
+	op      : Expr_Binary_Op,
 	op_token: Token,
 	rhs     : Expr,
 }
 
-Unary_Op :: enum {
+Expr_Unary_Op :: enum {
 	Pos,
 	Neg,
 }
 
-Binary_Op :: enum {
+Expr_Binary_Op :: enum {
 	Add,
 	Sub,
 	Mul,
 	Div,
 }
 
-token_to_unary_op :: #force_inline proc (kind: Token_Kind) -> (op: Unary_Op, ok: bool)
+token_to_unary_op :: #force_inline proc (kind: Token_Kind) -> (op: Expr_Unary_Op, ok: bool)
 {
 	#partial switch kind {
 	case .Add: return .Pos, true
@@ -62,7 +62,7 @@ token_to_unary_op :: #force_inline proc (kind: Token_Kind) -> (op: Unary_Op, ok:
 	return
 }
 
-token_to_binary_op :: #force_inline proc (kind: Token_Kind) -> (op: Binary_Op, ok: bool)
+token_to_binary_op :: #force_inline proc (kind: Token_Kind) -> (op: Expr_Binary_Op, ok: bool)
 {
 	#partial switch kind {
 	case .Add: return .Add, true
@@ -73,7 +73,7 @@ token_to_binary_op :: #force_inline proc (kind: Token_Kind) -> (op: Binary_Op, o
 	return
 }
 
-precedence_table := [Binary_Op]int {
+precedence_table := [Expr_Binary_Op]int {
 	.Add = 1,
 	.Sub = 1,
 	.Mul = 2,
@@ -273,7 +273,7 @@ parse_paren :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error)
 @(require_results)
 parse_unary :: proc (p: ^Parser) -> (unary: ^Expr_Unary, err: Parse_Error)
 {
-	op: Unary_Op
+	op: Expr_Unary_Op
 
 	#partial switch p.token.kind {
 	case .Add: op = .Pos

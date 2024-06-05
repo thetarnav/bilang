@@ -24,6 +24,15 @@ _scope_handle_writer_flush :: proc (w: ^io.Writer)
 }
 
 
+
+write_number :: proc(w: io.Writer, n: f64, highlight := true)
+{
+	if highlight do fmt.wprint(w, "\e[0;33m")
+	fmt.wprint(w, n)
+	if highlight do fmt.wprint(w, "\e[0m")
+}
+
+
 /*
 
 AST
@@ -71,7 +80,7 @@ write_expr :: proc (w: io.Writer, expr: Expr, highlight := true)
 	case ^Expr_Binary: write_binary(w, v, highlight)
 	case ^Expr_Unary:  write_unary (w, v, highlight)
 	case ^Expr_Ident:  write_ident (w, v, highlight)
-	case ^Expr_Number: write_number(w, v, highlight)
+	case ^Expr_Number: write_expr_number(w, v, highlight)
 	}
 
 	return
@@ -144,13 +153,11 @@ write_ident :: proc (w: io.Writer, ident: ^Expr_Ident, highlight := true)
 print_number :: proc (number: ^Expr_Number, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
-	write_number(w^, number, highlight)
+	write_expr_number(w^, number, highlight)
 }
-write_number :: proc (w: io.Writer, number: ^Expr_Number, highlight := true)
+write_expr_number :: proc (w: io.Writer, number: ^Expr_Number, highlight := true)
 {
-	if highlight do fmt.wprint(w, "\e[0;33m")
-	fmt.wprint(w, number.value)
-	if highlight do fmt.wprint(w, "\e[0m")
+	write_number(w, number.value, highlight)
 }
 
 
@@ -190,22 +197,16 @@ write_atom :: proc (w: io.Writer, atom: Atom, highlight := true)
 {
 	switch a in atom {
 	case Atom_Num:
-		if highlight do fmt.wprint(w, "\e[0;33m")
-		fmt.wprint(w, a.value)
-		if highlight do fmt.wprint(w, "\e[0m")
+		write_fraction(w, a, highlight)
 	case Atom_Var:
-		if a.mult != 1 {
-			if highlight do fmt.wprint(w, "\e[0;33m")
-			fmt.wprint(w, a.mult)
-			if highlight do fmt.wprint(w, "\e[0m")
+		if a.f != FRACTION_IDENTITY {
+			write_fraction(w, a, highlight)
 		}
 		
 		fmt.wprint(w, a.name)
 	case Atom_Binary:
-		if a.mult != 1 {
-			if highlight do fmt.wprint(w, "\e[0;33m")
-			fmt.wprint(w, a.mult)
-			if highlight do fmt.wprint(w, "\e[0m")
+		if a.f != FRACTION_IDENTITY {
+			write_fraction(w, a, highlight)
 		}
 
 		if highlight do fmt.wprint(w, "\e[38;5;240m")
@@ -215,7 +216,6 @@ write_atom :: proc (w: io.Writer, atom: Atom, highlight := true)
 		if highlight do fmt.wprint(w, "\e[0;36m")
 		switch a.op {
 		case .Add: fmt.wprint(w, "+ ")
-		case .Sub: fmt.wprint(w, "- ")
 		case .Mul: fmt.wprint(w, "* ")
 		case .Div: fmt.wprint(w, "/ ")
 		}
@@ -231,4 +231,31 @@ write_atom :: proc (w: io.Writer, atom: Atom, highlight := true)
 		fmt.wprint(w, ")")
 		if highlight do fmt.wprint(w, "\e[0m")
 	}
+}
+
+write_fraction :: proc(w: io.Writer, f: Fraction, highlight := true)
+{
+	num := f.num / f.den
+	write_number(w, num, highlight)
+	
+	// if f.den == 1 {
+	// 	write_number(w, f.num, highlight)
+	// }
+	// else {
+	// 	if highlight do fmt.wprint(w, "\e[38;5;240m")
+	// 	fmt.wprint(w, "(")
+	// 	if highlight do fmt.wprint(w, "\e[0m")
+
+	// 	write_number(w, f.num, highlight)
+
+	// 	if highlight do fmt.wprint(w, "\e[0;36m")
+	// 	fmt.wprint(w, "/")
+	// 	if highlight do fmt.wprint(w, "\e[0m")
+
+	// 	write_number(w, f.den, highlight)
+
+	// 	if highlight do fmt.wprint(w, "\e[38;5;240m")
+	// 	fmt.wprint(w, ")")
+	// 	if highlight do fmt.wprint(w, "\e[0m")
+	// }
 }
