@@ -105,7 +105,48 @@ walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 			lhs_has_deps := has_dependencies(constr.lhs^)
 			rhs_has_deps := has_dependencies(constr.rhs^)
 	
-			if lhs_has_deps && rhs_has_deps do break
+
+			if lhs_has_deps && rhs_has_deps {
+
+				#partial switch &lhs in constr.lhs {
+				case Atom_Binary:
+					#partial switch &rhs in constr.rhs {
+					case Atom_Binary:
+						if lhs.op == .Add && rhs.op == .Add {
+
+							flatten_mult(&lhs)
+							flatten_mult(&rhs)
+
+							lhs_lhs_has_deps := has_dependencies(lhs.lhs^)
+							rhs_lhs_has_deps := has_dependencies(rhs.lhs^)
+
+							switch {
+							case lhs_lhs_has_deps && rhs_lhs_has_deps:
+								lhs.rhs, rhs.lhs = rhs.lhs, lhs.rhs
+								atom_mult(lhs.rhs, -1)
+								atom_mult(rhs.lhs, -1)
+							case lhs_lhs_has_deps:
+								lhs.rhs, rhs.rhs = rhs.rhs, lhs.rhs
+								atom_mult(lhs.rhs, -1)
+								atom_mult(rhs.rhs, -1)
+							case rhs_lhs_has_deps:
+								lhs.lhs, rhs.lhs = rhs.lhs, lhs.lhs
+								atom_mult(lhs.lhs, -1)
+								atom_mult(rhs.lhs, -1)
+							case:
+								lhs.lhs, rhs.rhs = rhs.rhs, lhs.lhs
+								atom_mult(lhs.lhs, -1)
+								atom_mult(rhs.rhs, -1)
+							}
+
+							continue loop
+						}	
+					}
+				}
+
+				break
+			}
+
 	
 			if rhs_has_deps {
 				constr.lhs, constr.rhs = constr.rhs, constr.lhs
@@ -117,16 +158,15 @@ walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 			case Atom_Var:
 				if lhs.mult == 1 do break
 				
-				switch &rhs in constr.rhs {
-				case Atom_Num:    rhs.value /= lhs.mult
-				case Atom_Var:    rhs.mult  /= lhs.mult
-				case Atom_Binary: rhs.mult  /= lhs.mult
-				}
+				atom_mult(constr.rhs, 1 / lhs.mult)
 				lhs.mult = 1
 
 				continue loop
 
 			case Atom_Binary:
+
+				flatten_mult(&lhs)
+
 				new_bin: Atom_Binary
 				new_bin.mult = 1
 				
@@ -151,12 +191,10 @@ walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 	
 					new_bin.rhs = lhs.rhs
 					constr.lhs  = lhs.lhs
-					new_bin.lhs = constr.rhs
 				}
 	
 				new_bin.lhs = constr.rhs
 				constr.rhs  = new_atom(new_bin)
-
 
 				continue loop
 			}
@@ -168,7 +206,7 @@ walk_constraints :: proc (constraints: ^[dynamic]Constraint)
 
 walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint)
 {
-	switch a in atom {
+	switch &a in atom {
 	case Atom_Num:
 	case Atom_Var:
 		for constr, i in constraints {
@@ -197,16 +235,15 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 			break
 		}
 
+		// fold multipliers
+		flatten_mult(&a)
+
 		if is_rhs_num {
 			switch a.op {
 			case .Add, .Sub:
 				// handled above, can only be folded if both sides are numbers
 			case .Div:
-				switch &lhs in a.lhs {
-				case Atom_Num:    lhs.value /= rhs_num.value
-				case Atom_Var:    lhs.mult  /= rhs_num.value
-				case Atom_Binary: lhs.mult  /= rhs_num.value
-				}
+				atom_mult(a.lhs, 1 / rhs_num.value)
 				atom ^= a.lhs^
 			case .Mul:
 				switch rhs_num.value {
@@ -215,11 +252,7 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 				case 0:
 					atom ^= Atom_Num{0}
 				case:
-					switch &lhs in a.lhs {
-					case Atom_Num:    lhs.value *= rhs_num.value
-					case Atom_Var:    lhs.mult  *= rhs_num.value
-					case Atom_Binary: lhs.mult  *= rhs_num.value
-					}
+					atom_mult(a.lhs, rhs_num.value)
 					atom ^= a.lhs^
 				}
 			}
@@ -239,17 +272,36 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 				case 0:
 					atom ^= Atom_Num{0}
 				case:
-					switch &rhs in a.rhs {
-					case Atom_Num:    rhs.value *= lhs_num.value
-					case Atom_Var:    rhs.mult  *= lhs_num.value
-					case Atom_Binary: rhs.mult  *= lhs_num.value
-					}
+					atom_mult(a.rhs, lhs_num.value)
 					atom ^= a.rhs^
 				}
 			}
 			break
 		}
 	}
+}
+
+atom_mult :: proc (atom: ^Atom, mult: f64)
+{
+	switch &a in atom {
+	case Atom_Num:    a.value *= mult
+	case Atom_Var:    a.mult  *= mult
+	case Atom_Binary: a.mult  *= mult
+	}
+}
+
+flatten_mult :: proc (bin: ^Atom_Binary) {
+	if bin.mult == 1 do return
+
+	switch bin.op {
+	case .Add, .Sub:
+		atom_mult(bin.lhs, bin.mult)
+		atom_mult(bin.rhs, bin.mult)
+	case .Mul, .Div:
+		atom_mult(bin.lhs, bin.mult)
+	}
+
+	bin.mult = 1
 }
 
 has_dependencies :: proc (atom: Atom) -> bool
