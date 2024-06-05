@@ -268,7 +268,7 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 			case .Mul: atom ^= Atom_Num{Fraction{lhs_num.num * rhs_num.num, lhs_num.den * rhs_num.den}}
 			case .Div: atom ^= Atom_Num{Fraction{lhs_num.num * rhs_num.den, lhs_num.den * rhs_num.num}}
 			}
-			break
+			return
 		}
 
 		if is_rhs_num {
@@ -282,7 +282,7 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 				atom_mult(a.lhs, rhs_num)
 				atom ^= a.lhs^
 			}
-			break
+			return
 		}
 
 		if is_lhs_num {
@@ -295,7 +295,28 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 				atom_mult(a.rhs, lhs_num)
 				atom ^= a.rhs^
 			}
-			break
+			return
+		}
+
+
+		/*
+		fold adding same vars
+		*/
+		lhs_var, is_lhs_var := a.lhs.(Atom_Var)
+		rhs_var, is_rhs_var := a.rhs.(Atom_Var)
+
+		if is_lhs_var && is_rhs_var && lhs_var.name == rhs_var.name {
+			switch a.op {
+			case .Add:
+				atom ^= Atom_Var{
+					name = lhs_var.name,
+					f    = {lhs_var.num * rhs_var.den + rhs_var.num * lhs_var.den, lhs_var.den * rhs_var.den},
+				}
+				return
+			case .Mul, .Div:
+				// TODO
+				// might require squaring
+			}
 		}
 	}
 }
