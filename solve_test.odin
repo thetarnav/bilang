@@ -61,6 +61,13 @@ import test "core:testing"
 
 			"n = 7"+"\n",
 		},
+		{
+			"(n * 2 + 10) / (n + 1) = 2 * x\n"+
+			"x * 2 = 3\n",
+
+			"n = 7\n"+
+			"x = 1.5\n",
+		},
 	}
 
 	@static arena_buf: [mem.Megabyte]byte

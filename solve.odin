@@ -243,14 +243,23 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 	case Atom_Var:
 		for constr, i in constraints {
 			if i == constr_i do continue
-			if constr.lhs^ == a && a.f == FRACTION_IDENTITY {
-				walk_atom(constr.rhs, i, constraints)
-				atom ^= atom_copy(constr.rhs^)
+
+			var: Atom_Var
+			copy: Atom
+			if lhs_var, is_lhs_var := constr.lhs.(Atom_Var); is_lhs_var && lhs_var.name == a.name {
+				var  = lhs_var
+				copy = atom_copy(constr.rhs^)
+			} else
+			if rhs_var, is_rhs_var := constr.rhs.(Atom_Var); is_rhs_var && rhs_var.name == a.name {
+				var  = rhs_var
+				copy = atom_copy(constr.lhs^)
+			} else {
+				continue
 			}
-			if constr.rhs^ == a && a.f == FRACTION_IDENTITY {
-				walk_atom(constr.lhs, i, constraints)
-				atom ^= atom_copy(constr.lhs^)
-			}
+
+			atom_div(&copy, var.f)
+			atom_mul(&copy, a.f)
+			atom ^= copy
 		}
 	case Atom_Binary:
 		walk_atom(a.lhs, constr_i, constraints)
@@ -279,7 +288,7 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 				atom_div(a.lhs, rhs_num)
 				atom ^= a.lhs^
 			case .Mul:
-				atom_mult(a.lhs, rhs_num)
+				atom_mul(a.lhs, rhs_num)
 				atom ^= a.lhs^
 			}
 			return
@@ -292,7 +301,7 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 			case .Div:
 				// cannot be folded here
 			case .Mul:
-				atom_mult(a.rhs, lhs_num)
+				atom_mul(a.rhs, lhs_num)
 				atom ^= a.rhs^
 			}
 			return
@@ -335,7 +344,7 @@ atom_copy :: proc (src: Atom) -> Atom
 	return {}
 }
 
-atom_mult :: proc (atom: ^Atom, f: Fraction)
+atom_mul :: proc (atom: ^Atom, f: Fraction)
 {
 	switch f {
 	case FRACTION_ZERO:
@@ -402,13 +411,13 @@ flatten_mult :: proc (bin: ^Atom_Binary) {
 
 	switch bin.op {
 	case .Add:
-		atom_mult(bin.lhs, bin)
-		atom_mult(bin.rhs, bin)
+		atom_mul(bin.lhs, bin)
+		atom_mul(bin.rhs, bin)
 	case .Mul:
-		atom_mult(bin.lhs, bin)
+		atom_mul(bin.lhs, bin)
 	case .Div:
-		atom_mult(bin.lhs, {bin.num, 1})
-		atom_mult(bin.rhs, {1, bin.den})
+		atom_mul(bin.lhs, {bin.num, 1})
+		atom_mul(bin.rhs, {bin.den, 1})
 	}
 
 	bin.f = FRACTION_IDENTITY
