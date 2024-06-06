@@ -65,8 +65,8 @@ import test "core:testing"
 			"(n * 2 + 10) / (n + 1) = 2 * x\n"+
 			"x * 2 = 3\n",
 
-			"n = 7\n"+
-			"x = 1.5\n",
+			"x = 1.5\n"+
+			"n = 7\n",
 		},
 	}
 

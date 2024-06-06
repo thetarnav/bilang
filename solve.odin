@@ -51,26 +51,7 @@ new_atom :: proc (atom: Atom) -> ^Atom
 	return a
 }
 
-@(require_results)
-solve :: proc (decls: []Decl, allocator := context.allocator) -> []Constraint
-{
-	context.allocator = allocator
-
-	constraints: [dynamic]Constraint
-
-	for decl in decls {
-		constraint: Constraint
-		constraint.lhs = new_atom(walk_expr(decl.lhs))
-		constraint.rhs = new_atom(walk_expr(decl.rhs))
-		append(&constraints, constraint)
-	}
-
-	walk_constraints(&constraints)
-
-	return constraints[:]
-}
-
-walk_expr :: proc (expr: Expr) -> Atom
+atom_from_expr :: proc (expr: Expr) -> Atom
 {
 	switch v in expr {
 	case ^Expr_Ident:
@@ -85,8 +66,8 @@ walk_expr :: proc (expr: Expr) -> Atom
 		}
 	case ^Expr_Binary:
 		bin := Atom_Binary{
-			lhs = new_atom(walk_expr(v.lhs)),
-			rhs = new_atom(walk_expr(v.rhs)),
+			lhs = new_atom(atom_from_expr(v.lhs)),
+			rhs = new_atom(atom_from_expr(v.rhs)),
 			f   = FRACTION_IDENTITY,
 		}
 		
@@ -106,136 +87,155 @@ walk_expr :: proc (expr: Expr) -> Atom
 	case ^Expr_Unary:
 		switch v.op {
 		case .Neg:
-			rhs := walk_expr(v.rhs)
+			rhs := atom_from_expr(v.rhs)
 			atom_neg(&rhs)
 			return rhs
 		case .Pos:
-			return walk_expr(v.rhs)
+			return atom_from_expr(v.rhs)
 		}
 	}
 
 	return Atom_Num{}
 }
 
-walk_constraints :: proc (constraints: ^[dynamic]Constraint)
+@(require_results)
+solve :: proc (decls: []Decl, allocator := context.allocator) -> []Constraint
 {
-	for &constr, i in constraints {
-		loop: for {
-			walk_atom(constr.lhs, i, constraints)
-			walk_atom(constr.rhs, i, constraints)
-	
-			lhs_has_deps := has_dependencies(constr.lhs^)
-			rhs_has_deps := has_dependencies(constr.rhs^)
-	
+	context.allocator = allocator
 
-			if lhs_has_deps && rhs_has_deps {
+	constraints: [dynamic]Constraint
 
-				#partial switch &lhs in constr.lhs {
-				case Atom_Binary:
-					#partial switch &rhs in constr.rhs {
-					case Atom_Binary:
-						if lhs.op == .Add && rhs.op == .Add {
+	for decl in decls {
+		constraint: Constraint
+		constraint.lhs = new_atom(atom_from_expr(decl.lhs))
+		constraint.rhs = new_atom(atom_from_expr(decl.rhs))
+		append(&constraints, constraint)
+	}
 
-							flatten_mult(&lhs)
-							flatten_mult(&rhs)
-
-							lhs_lhs_has_deps := has_dependencies(lhs.lhs^)
-							rhs_lhs_has_deps := has_dependencies(rhs.lhs^)
-
-							switch {
-							case lhs_lhs_has_deps && rhs_lhs_has_deps:
-								lhs.rhs, rhs.lhs = rhs.lhs, lhs.rhs
-								atom_neg(lhs.rhs)
-								atom_neg(rhs.lhs)
-							case lhs_lhs_has_deps:
-								lhs.rhs, rhs.rhs = rhs.rhs, lhs.rhs
-								atom_neg(lhs.rhs)
-								atom_neg(rhs.rhs)
-							case rhs_lhs_has_deps:
-								lhs.lhs, rhs.lhs = rhs.lhs, lhs.lhs
-								atom_neg(lhs.lhs)
-								atom_neg(rhs.lhs)
-							case:
-								lhs.lhs, rhs.rhs = rhs.rhs, lhs.lhs
-								atom_neg(lhs.lhs)
-								atom_neg(rhs.rhs)
-							}
-
-							continue loop
-						}	
-					}
-				}
-
-				break
-			}
-
-	
-			if rhs_has_deps {
-				constr.lhs, constr.rhs = constr.rhs, constr.lhs
-			}
-
-			switch &lhs in constr.lhs {
-			case Atom_Num:
-				// ignore
-			case Atom_Var:
-				if lhs.f == FRACTION_IDENTITY do break
-				
-				atom_div(constr.rhs, lhs.f)
-				lhs.f = FRACTION_IDENTITY
-
-				continue loop
-
-			case Atom_Binary:
-
-				flatten_mult(&lhs)
-
-				new_bin: Atom_Binary
-				new_bin.f = FRACTION_IDENTITY
-
-				switch lhs.op {
-				case .Add:
-					new_bin.op = .Add
-					switch {
-					case !has_dependencies(lhs.lhs^):
-						new_bin.rhs = lhs.lhs
-						constr.lhs  = lhs.rhs
-					case !has_dependencies(lhs.rhs^):
-						new_bin.rhs = lhs.rhs
-						constr.lhs  = lhs.lhs
-					case:
-						break loop
-					}
-					atom_neg(new_bin.rhs)
-				case .Mul:
-					new_bin.op = .Div
-					switch {
-					case !has_dependencies(lhs.lhs^):
-						new_bin.rhs = lhs.lhs
-						constr.lhs  = lhs.rhs
-					case !has_dependencies(lhs.rhs^):
-						new_bin.rhs = lhs.rhs
-						constr.lhs  = lhs.lhs
-					case:
-						break loop
-					}
-				case .Div:
-					new_bin.op  = .Mul
-					new_bin.rhs = lhs.rhs
-					constr.lhs  = lhs.lhs
-				}
-	
-				new_bin.lhs = constr.rhs
-				constr.rhs  = new_atom(new_bin)
-
-				continue loop
-			}
-
-			break
+	for {
+		updated: bool
+		for &constr, i in constraints {
+			walk_constraint(&constr, i, &constraints, &updated)
 		}
+		if !updated do break
+	}
+
+	return constraints[:]
+}
+
+walk_constraint :: proc (constr: ^Constraint, constr_i: int, constraints: ^[dynamic]Constraint, updated: ^bool)
+{
+	
+	walk_atom(constr.lhs, constr_i, constraints, updated)
+	walk_atom(constr.rhs, constr_i, constraints, updated)
+
+	lhs_has_deps := has_dependencies(constr.lhs^)
+	rhs_has_deps := has_dependencies(constr.rhs^)
+
+
+	if lhs_has_deps && rhs_has_deps {
+
+		#partial switch &lhs in constr.lhs {
+		case Atom_Binary:
+			#partial switch &rhs in constr.rhs {
+			case Atom_Binary:
+				if lhs.op == .Add && rhs.op == .Add {
+
+					flatten_mult(&lhs)
+					flatten_mult(&rhs)
+
+					lhs_lhs_has_deps := has_dependencies(lhs.lhs^)
+					rhs_lhs_has_deps := has_dependencies(rhs.lhs^)
+
+					switch {
+					case lhs_lhs_has_deps && rhs_lhs_has_deps:
+						lhs.rhs, rhs.lhs = rhs.lhs, lhs.rhs
+						atom_neg(lhs.rhs)
+						atom_neg(rhs.lhs)
+					case lhs_lhs_has_deps:
+						lhs.rhs, rhs.rhs = rhs.rhs, lhs.rhs
+						atom_neg(lhs.rhs)
+						atom_neg(rhs.rhs)
+					case rhs_lhs_has_deps:
+						lhs.lhs, rhs.lhs = rhs.lhs, lhs.lhs
+						atom_neg(lhs.lhs)
+						atom_neg(rhs.lhs)
+					case:
+						lhs.lhs, rhs.rhs = rhs.rhs, lhs.lhs
+						atom_neg(lhs.lhs)
+						atom_neg(rhs.rhs)
+					}
+
+					updated ^= true
+				}	
+			}
+		}
+
+		return
+	}
+
+
+	if rhs_has_deps {
+		constr.lhs, constr.rhs = constr.rhs, constr.lhs
+	}
+
+	switch_sides: switch &lhs in constr.lhs {
+	case Atom_Num:
+		// ignore
+	case Atom_Var:
+		if lhs.f == FRACTION_IDENTITY do break
+		
+		atom_div(constr.rhs, lhs.f)
+		lhs.f = FRACTION_IDENTITY
+
+		updated ^= true
+	case Atom_Binary:
+
+		flatten_mult(&lhs)
+
+		new_bin: Atom_Binary
+		new_bin.f = FRACTION_IDENTITY
+
+		switch lhs.op {
+		case .Add:
+			new_bin.op = .Add
+			switch {
+			case !has_dependencies(lhs.lhs^):
+				new_bin.rhs = lhs.lhs
+				constr.lhs  = lhs.rhs
+			case !has_dependencies(lhs.rhs^):
+				new_bin.rhs = lhs.rhs
+				constr.lhs  = lhs.lhs
+			case:
+				break switch_sides
+			}
+			atom_neg(new_bin.rhs)
+		case .Mul:
+			new_bin.op = .Div
+			switch {
+			case !has_dependencies(lhs.lhs^):
+				new_bin.rhs = lhs.lhs
+				constr.lhs  = lhs.rhs
+			case !has_dependencies(lhs.rhs^):
+				new_bin.rhs = lhs.rhs
+				constr.lhs  = lhs.lhs
+			case:
+				break switch_sides
+			}
+		case .Div:
+			new_bin.op  = .Mul
+			new_bin.rhs = lhs.rhs
+			constr.lhs  = lhs.lhs
+		}
+
+		new_bin.lhs = constr.rhs
+		constr.rhs  = new_atom(new_bin)
+
+		updated ^= true
 	}
 }
 
-walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint)
+walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint, updated: ^bool)
 {
 	switch &a in atom {
 	case Atom_Num:
@@ -260,10 +260,12 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 			atom_div(&copy, var.f)
 			atom_mul(&copy, a.f)
 			atom ^= copy
+
+			updated ^= true
 		}
 	case Atom_Binary:
-		walk_atom(a.lhs, constr_i, constraints)
-		walk_atom(a.rhs, constr_i, constraints)
+		walk_atom(a.lhs, constr_i, constraints, updated)
+		walk_atom(a.rhs, constr_i, constraints, updated)
 
 		// fold multipliers
 		flatten_mult(&a)
@@ -277,6 +279,9 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 			case .Mul: atom ^= Atom_Num{Fraction{lhs_num.num * rhs_num.num, lhs_num.den * rhs_num.den}}
 			case .Div: atom ^= Atom_Num{Fraction{lhs_num.num * rhs_num.den, lhs_num.den * rhs_num.num}}
 			}
+
+			updated ^= true
+
 			return
 		}
 
@@ -291,6 +296,9 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 				atom_mul(a.lhs, rhs_num)
 				atom ^= a.lhs^
 			}
+
+			updated ^= true
+
 			return
 		}
 
@@ -304,6 +312,9 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 				atom_mul(a.rhs, lhs_num)
 				atom ^= a.rhs^
 			}
+
+			updated ^= true
+			
 			return
 		}
 
@@ -321,6 +332,9 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 					name = lhs_var.name,
 					f    = {lhs_var.num * rhs_var.den + rhs_var.num * lhs_var.den, lhs_var.den * rhs_var.den},
 				}
+
+				updated ^= true
+				
 				return
 			case .Mul, .Div:
 				// TODO
@@ -328,6 +342,8 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constraints: ^[dynamic]Constraint
 			}
 		}
 	}
+
+	return
 }
 
 atom_copy :: proc (src: Atom) -> Atom
