@@ -45,10 +45,10 @@ a     = -4 + 2
 
 	print_decls(decls)
 
-	constraints := solve(decls)
+	constrs := solve(decls)
 
 	fmt.print("\n-------\n\n")
-	print_contraints(constraints)
+	print_contraints(constrs)
 
 	mem.scratch_allocator_destroy(&parser_scratch)
 }

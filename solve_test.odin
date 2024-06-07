@@ -16,57 +16,62 @@ import test "core:testing"
 		{
 			"3 - x + 2 = 3",
 
-			"x = 2"+"\n",
+			"x: x = 2\n",
 		},
 		{
 			"3 / x = 1",
 
-			"x = 3"+"\n",
+			"x: x = 3\n",
 		},
 		{
 			"x / 3 = 1",
 
-			"x = 3"+"\n",
+			"x: x = 3\n",
 		},
 		{
 			"2 * x = 6",
 
-			"x = 3"+"\n",
+			"x: x = 3\n",
 		},
 		{
 			"6 = x * 2",
 
-			"x = 3"+"\n",
+			"x: x = 3\n",
 		},
 		{
-			"a + b = 10"+"\n"+
+			"a + b = 10\n"+
 			"a = -4 + 2",
 
-			"b = 12"+"\n"+
-			"a = -2"+"\n",	
+			"a: a = -2\n"+
+			"b: b = 12\n"+
+			"a: a = -2\n",	
 		},
 		{
-			"y = a * x + b"+"\n"+
-			"a = 1 / 2"+"\n"+
-			"b = -4"+"\n"+
-			"y = 2"+"\n",
+			"y = a * x + b\n"+
+			"a = 1 / 2\n"+
+			"b = -4\n"+
+			"y = 2\n",
 
-			"x = 12"+"\n"+
-			"a = 0.5"+"\n"+
-			"b = -4"+"\n"+
-			"y = 2"+"\n",
+			"y: y = 2\n"+
+			"a: a = 0.5\n"+
+			"x: x = 12\n"+
+			"b: b = -4\n"+
+			"a: a = 0.5\n"+
+			"b: b = -4\n"+
+			"y: y = 2\n",
 		},
 		{
 			"(n * 2 + 10) / (n + 1) = 3",
 
-			"n = 7"+"\n",
+			"n: n = 7\n",
 		},
 		{
 			"(n * 2 + 10) / (n + 1) = 2 * x\n"+
 			"x * 2 = 3\n",
 
-			"x = 1.5\n"+
-			"n = 7\n",
+			"n: n = 7\n"+
+			"x: x = 1.5\n"+
+			"x: x = 1.5\n",
 		},
 	}
 
@@ -93,12 +98,12 @@ import test "core:testing"
 			continue
 		}
 	
-		constraints := solve(decls)
+		constrs := solve(decls)
 	
 		b := strings.builder_make_len_cap(0, 1024)
 		w := strings.to_writer(&b)
 	
-		write_contraints(w, constraints, false)
+		write_contraints(w, constrs, false)
 	
 		output := strings.to_string(b)
 
@@ -106,7 +111,7 @@ import test "core:testing"
 
 			strings.builder_reset(&b) // makes output unusable !!!
 
-			write_contraints(w, constraints)
+			write_contraints(w, constrs)
 			output_pretty := strings.clone(strings.to_string(b))
 
 			strings.builder_reset(&b)

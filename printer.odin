@@ -5,6 +5,7 @@ import "core:io"
 import "core:os"
 import "core:bufio"
 
+
 @(private, deferred_out=_scope_handle_writer_flush)
 _scope_handle_writer :: #force_inline proc (fd: os.Handle) -> (w_ptr: ^io.Writer)
 {
@@ -168,14 +169,17 @@ CONSTRAINTS
 */
 
 
-print_contraints :: proc (constraints: []Constraint, highlight := true, fd := os.stdout)
+print_contraints :: proc (constrs: []Constraint, highlight := true, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
-	write_contraints(w^, constraints, highlight)
+	write_contraints(w^, constrs, highlight)
 }
-write_contraints :: proc (w: io.Writer, constraints: []Constraint, highlight := true)
+write_contraints :: proc (w: io.Writer, constrs: []Constraint, highlight := true)
 {
-	for constr in constraints {
+	for constr in constrs {
+		fmt.wprint(w, constr.var)
+		fmt.wprint(w, ": ")
+
 		write_atom(w, constr.lhs^, highlight)
 
 		if highlight do fmt.wprint(w, "\e[0;36m")
