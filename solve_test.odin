@@ -73,6 +73,12 @@ import test "core:testing"
 			"x: x = 1.5\n"+
 			"x: x = 1.5\n",
 		},
+		{
+			"(2*n + 10) / (n + 1) = 2*x + 1/2\n",
+
+			"n: (/ (+ n 5) (+ n 1)) = (+ x 0.25)\n"+
+			"x: x = (/ (+ 12n 76) (+ n 1))\n",
+		},
 	}
 
 	@static arena_buf: [mem.Megabyte]byte

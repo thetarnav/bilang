@@ -1,8 +1,5 @@
 package bilang
 
-import "core:fmt"
-_ :: fmt
-
 
 Atom :: union #no_nil {
 	Atom_Num,
@@ -309,7 +306,6 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 			}
 
 			updated ^= true
-
 			return
 		}
 
@@ -320,14 +316,16 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 			case .Div:
 				atom_div(a.lhs, rhs_num)
 				atom ^= a.lhs^
+
+				updated ^= true
+				return
 			case .Mul:
 				atom_mul(a.lhs, rhs_num)
 				atom ^= a.lhs^
+
+				updated ^= true
+				return
 			}
-
-			updated ^= true
-
-			return
 		}
 
 		if is_lhs_num {
@@ -339,11 +337,10 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 			case .Mul:
 				atom_mul(a.rhs, lhs_num)
 				atom ^= a.rhs^
-			}
 
-			updated ^= true
-			
-			return
+				updated ^= true
+				return
+			}
 		}
 
 
@@ -361,8 +358,7 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 					f    = {lhs_var.num * rhs_var.den + rhs_var.num * lhs_var.den, lhs_var.den * rhs_var.den},
 				}
 
-				updated ^= true
-				
+				updated ^= true	
 				return
 			case .Mul, .Div:
 				// TODO
