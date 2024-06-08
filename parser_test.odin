@@ -57,7 +57,7 @@ import test "core:testing"
 		decls, err := parse_src(test_case.input)
 	
 		if err != nil {
-			log.errorf(
+			test.errorf(t,
 				"\nFailed to parse input:\n%s",
 				parser_error_to_string(test_case.input, err),
 			)
@@ -78,7 +78,7 @@ import test "core:testing"
 			write_decls(w, decls)
 			output_pretty := strings.clone(strings.to_string(b))
 
-			log.errorf(
+			test.errorf(t,
 				"\n\e[0;32mEXPECTED:\e[0m\n%s\e[0;31mACTUAL:\e[0m\n%s",
 				test_case.solve, output_pretty,
 			)
