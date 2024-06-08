@@ -1,8 +1,10 @@
 package bilang
 
 import "core:fmt"
+import "core:mem"
 import "core:io"
 import "core:os"
+import "core:strings"
 import "core:bufio"
 
 
@@ -174,6 +176,15 @@ print_contraints :: proc (constrs: []Constraint, highlight := true, fd := os.std
 	w := _scope_handle_writer(fd)
 	write_contraints(w^, constrs, highlight)
 }
+contraints_to_string :: proc (constrs: []Constraint, highlight := true, allocator := context.allocator) -> (s: string, err: mem.Allocator_Error)
+{
+	b := strings.builder_make_len_cap(0, 1024, allocator) or_return
+	w := strings.to_writer(&b)
+
+	write_contraints(w, constrs)
+
+	return strings.to_string(b), nil
+}
 write_contraints :: proc (w: io.Writer, constrs: []Constraint, highlight := true)
 {
 	for constr in constrs {
@@ -209,10 +220,6 @@ write_atom :: proc (w: io.Writer, atom: Atom, highlight := true)
 		
 		fmt.wprint(w, a.name)
 	case Atom_Binary:
-		if a.f != FRACTION_IDENTITY {
-			write_fraction(w, a, highlight)
-		}
-
 		if highlight do fmt.wprint(w, "\e[38;5;240m")
 		fmt.wprint(w, "(")
 		if highlight do fmt.wprint(w, "\e[0m")
