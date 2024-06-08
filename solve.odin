@@ -193,96 +193,90 @@ walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 	so that the var is on the left side,
 	and everything else is on the right side
 	*/
-	#partial switch &lhs in constr.lhs {
-	case Atom_Binary:
-		#partial switch &rhs in constr.rhs {
-		case Atom_Binary:
-			if lhs.op == .Add && rhs.op == .Add {
+	lhs_bin, is_lhs_bin := &constr.lhs.(Atom_Binary)
+	rhs_bin, is_rhs_bin := &constr.rhs.(Atom_Binary)
+	
+	if is_lhs_bin && is_rhs_bin && lhs_bin.op == .Add && rhs_bin.op == .Add {
 
-				move_add :: proc (
-					from    : ^Atom_Binary,
-					to      : ^Atom_Binary,
-					var_name: string,
-					side    : enum {LHS, RHS},
-					updated : ^bool,
-				) {
-					assert(from.op == .Add)
-
-					new_bin := Atom_Binary{op=.Add}
-
-					lhs_block: {
-						switch &lhs in from.lhs {
-						case Atom_Num:
-							if side == .RHS do break lhs_block
-
-						case Atom_Var:
-							if (side == .RHS && lhs.name != var_name) ||
-							   (side == .LHS && lhs.name == var_name) {
-								break lhs_block
-							}
-
-						case Atom_Binary:
-							if lhs.op == .Add {
-								move_add(&lhs, to, var_name, side, updated)
-								break lhs_block
-							} else
-							if (side == .RHS && !has_dependency(lhs, var_name)) ||
-							   (side == .LHS &&  has_dependency(lhs, var_name)) {
-								break lhs_block
-							}
-						}
-
-						new_bin.lhs = to.rhs   // reusing pointers
-						new_bin.rhs = from.lhs // reusing pointers
-						atom_neg(new_bin.rhs)
-						to.rhs   = new_atom(new_bin)
-						from.lhs = new_atom(Atom_Num{FRACTION_ZERO})
-						updated  ^= true
-
-						return
+		move_add :: proc (
+			from    : ^Atom_Binary,
+			to      : ^Atom_Binary,
+			var_name: string,
+			side    : enum {LHS, RHS},
+			updated : ^bool,
+		) {
+			assert(from.op == .Add)
+			assert(to.op   == .Add)
+	
+			lhs_block: {
+				switch &lhs in from.lhs {
+				case Atom_Num:
+					if side == .RHS do break lhs_block
+	
+				case Atom_Var:
+					if (side == .RHS && lhs.name != var_name) ||
+					   (side == .LHS && lhs.name == var_name) {
+						break lhs_block
 					}
-
-					rhs_block: {
-						switch &rhs in from.rhs {
-						case Atom_Num:
-							if side == .RHS do break rhs_block
-
-						case Atom_Var:
-							if side == .RHS && rhs.name != var_name ||
-							   side == .LHS && rhs.name == var_name {
-								break rhs_block
-							}
-
-						case Atom_Binary:
-							if rhs.op == .Add {
-								move_add(&rhs, to, var_name, side, updated)
-								break rhs_block
-							} else
-							if (side == .RHS && !has_dependency(rhs, var_name)) ||
-							   (side == .LHS &&  has_dependency(rhs, var_name)) {
-								break rhs_block
-							}
-						}
-
-						new_bin.lhs = to.rhs   // reusing pointers
-						new_bin.rhs = from.rhs // reusing pointers
-						atom_neg(new_bin.rhs)
-						to.rhs   = new_atom(new_bin)
-						from.rhs = new_atom(Atom_Num{FRACTION_ZERO})
-						updated ^= true
-
-						return
+	
+				case Atom_Binary:
+					if lhs.op == .Add {
+						move_add(&lhs, to, var_name, side, updated)
+						break lhs_block
+					} else
+					if (side == .RHS && !has_dependency(lhs, var_name)) ||
+					   (side == .LHS &&  has_dependency(lhs, var_name)) {
+						break lhs_block
 					}
 				}
-				
-				move_add(&lhs, &rhs, constr.var, .LHS, updated)
-				move_add(&rhs, &lhs, constr.var, .RHS, updated)
-
-				if updated^ {
-					log_debug_update(constrs, "moving adds")
-					return
+	
+				new_bin := Atom_Binary{op=.Add}
+				new_bin.lhs = to.rhs   // reusing pointers
+				new_bin.rhs = from.lhs // reusing pointers
+				atom_neg(new_bin.rhs)
+				to.rhs   = new_atom(new_bin)
+				from.lhs = new_atom(Atom_Num{FRACTION_ZERO})
+				updated  ^= true
+			}
+	
+			rhs_block: {
+				switch &rhs in from.rhs {
+				case Atom_Num:
+					if side == .RHS do break rhs_block
+	
+				case Atom_Var:
+					if side == .RHS && rhs.name != var_name ||
+					   side == .LHS && rhs.name == var_name {
+						break rhs_block
+					}
+	
+				case Atom_Binary:
+					if rhs.op == .Add {
+						move_add(&rhs, to, var_name, side, updated)
+						break rhs_block
+					} else
+					if (side == .RHS && !has_dependency(rhs, var_name)) ||
+					   (side == .LHS &&  has_dependency(rhs, var_name)) {
+						break rhs_block
+					}
 				}
-			}	
+	
+				new_bin := Atom_Binary{op=.Add}
+				new_bin.lhs = to.rhs   // reusing pointers
+				new_bin.rhs = from.rhs // reusing pointers
+				atom_neg(new_bin.rhs)
+				to.rhs   = new_atom(new_bin)
+				from.rhs = new_atom(Atom_Num{FRACTION_ZERO})
+				updated ^= true
+			}
+		}
+		
+		move_add(lhs_bin, rhs_bin, constr.var, .LHS, updated)
+		move_add(rhs_bin, lhs_bin, constr.var, .RHS, updated)
+	
+		if updated^ {
+			log_debug_update(constrs, "moving adds")
+			return
 		}
 	}
 
