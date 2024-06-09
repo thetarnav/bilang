@@ -232,6 +232,7 @@ walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		updated ^= true
 		
 	case Atom_Add:
+		// move addends to rhs if they don't depend on var
 		#reverse for &a, i in lhs.addends {
 			if has_dependency(a, constr.var) do continue
 
@@ -241,6 +242,32 @@ walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 			log_debug_update(constrs, "substracting addend lhs")
 			updated ^= true
 		}
+
+		/*
+		try extracting var from addends
+		2a + 3ab = 1  ->  a(2 + 3b) = 1  ->  a = 1 / (2 + 3b)
+		*/
+		extract: {
+			// all addends need to be dividable by var
+			for a in lhs.addends {
+				if !is_dividable_by_var(a, constr.var) do break extract
+			}
+
+			// remove var from addends
+			for &a in lhs.addends {
+				atom_divide_by_var(&a, constr.var)
+			}
+
+			// move addends to rhs
+			atom_div_by_atom(constr.rhs, lhs)
+
+			// lhs is now var
+			constr.lhs ^= Atom_Var{constr.var, FRACTION_IDENTITY}
+
+			log_debug_update(constrs, "extracting var from addends")
+			updated ^= true
+		}
+
 
 	case Atom_Mul:
 		#reverse for &a, i in lhs.factors {
@@ -693,6 +720,53 @@ atom_div :: proc (atom: ^Atom, f: Fraction)
 atom_neg :: proc (atom: ^Atom)
 {
 	atom_mul(atom, {-1, 1})
+}
+
+
+
+is_dividable_by_var :: proc (a: Atom, var: string) -> bool
+{
+	switch &v in a {
+	case Atom_Num:
+		return false
+	case Atom_Var:
+		return v.name == var
+	case Atom_Add:
+		for addend in v.addends {
+			if !is_dividable_by_var(addend, var) do return false
+		}
+		return true
+	case Atom_Mul:
+		for factor in v.factors {
+			if is_dividable_by_var(factor, var) do return true
+		}
+	case Atom_Div:
+		return is_dividable_by_var(v.dividend^, var) && !has_dependency(v.divisor^, var)
+	}
+	return false
+}
+
+// ! Check is_dividable_by_var before calling !
+atom_divide_by_var :: proc (a: ^Atom, var: string)
+{
+	switch &v in a {
+	case Atom_Num:
+		panic("unexpected num")
+	case Atom_Var:
+		a ^= Atom_Num{v.f}
+	case Atom_Add:
+		for &addend in v.addends {
+			atom_divide_by_var(&addend, var)
+		}
+	case Atom_Mul:
+		for &factor in v.factors {
+			if is_dividable_by_var(factor, var) {
+				atom_divide_by_var(&factor, var)
+			}
+		}
+	case Atom_Div:
+		atom_divide_by_var(v.dividend, var)
+	}
 }
 
 has_dependencies :: proc (atom: Atom) -> bool
