@@ -338,41 +338,60 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 					break
 				}
 
-				// fold adding nums
-				for addend2, j in a.addends[i+1:] {
-					num := addend2.(Atom_Num) or_continue
+				for &addend2, j in a.addends {
+					if j == i do continue
 
-					v.f = fraction_sum(v.f, num.f)
+					switch &v2 in addend2 {
+					case Atom_Num:
+						v2.f = fraction_sum(v2.f, v.f)
+					case Atom_Add:
+						append(&v2.addends, addend)
+					case Atom_Div:
+						/*
+					    (a / b) + 3/2 -> (2a + 3b) / 2b
+						*/
+						rhs := atom_copy(v2.divisor^)
+						atom_mul(v2.dividend, {v.f.den, 1})
+						atom_mul(&rhs,        {v.f.num, 1})
+						atom_mul(v2.divisor,  {v.f.den, 1})
+						v2.dividend ^= atom_add_make(v2.dividend^, rhs)
+					case Atom_Var, Atom_Mul:
+						continue
+					}
 
-					unordered_remove(&a.addends, j+i+1)
+					unordered_remove(&a.addends, i)
 
-					log_debug_update(constrs, "folding nums")
+					log_debug_update(constrs, "folding adding num")
 					updated ^= true
+					break
 				}
 
 			case Atom_Var:
 				// fold adding same vars
-				for addend2, j in a.addends[i+1:] {
-					var := addend2.(Atom_Var) or_continue
-					(var.name == v.name) or_continue
+				for &addend2, j in a.addends {
+					if j == i do continue
+
+					var2 := (&addend2.(Atom_Var)) or_continue
+					(var2.name == v.name) or_continue
 					
-					v.f = fraction_sum(v.f, var.f)
+					var2.f = fraction_sum(var2.f, v.f)
+					unordered_remove(&a.addends, i)
 
-					unordered_remove(&a.addends, j+i+1)
-
-					log_debug_update(constrs, "folding vars")
+					log_debug_update(constrs, "folding adding same vars")
 					updated ^= true
 				}
 
 			case Atom_Add:
 				// fold adding additions
-				for addend2, j in a.addends[i+1:] {
-					add := addend2.(Atom_Add) or_continue
+				for &addend2, j in a.addends {
+					if j == i do continue
 
-					append(&a.addends, ..add.addends[:])
-					unordered_remove(&a.addends, j+i+1)
+					add2 := (&addend2.(Atom_Add)) or_continue
 
-					log_debug_update(constrs, "folding adds")
+					append(&add2.addends, ..v.addends[:])
+					unordered_remove(&a.addends, i)
+
+					log_debug_update(constrs, "folding adding additions")
 					updated ^= true
 				}
 
