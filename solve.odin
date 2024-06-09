@@ -560,44 +560,34 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 		walk_atom(a.top, constr_i, constrs, updated)
 		walk_atom(a.bot,  constr_i, constrs, updated)
 
-		top_num, is_top_num := a.top.(Atom_Num)
-		bot_num, is_bot_num := a.bot.(Atom_Num)
+		switch bot in a.bot {
+		case Atom_Num:
 
-		// fold dividing zeros
-		if is_bot_num && bot_num.num == 0 {
-			atom ^= Atom_Num{FRACTION_ZERO}
-			log_debug_update(constrs, "divide by zero")
-			updated ^= true
-			return // atom is now a num
-		}
+			switch top in a.top {
+			case Atom_Num: atom_div(a.top, bot.f)
+			case Atom_Var: atom_div(a.top, bot.f)
+			case Atom_Div: atom_mul(top.bot, bot.f)
+			case Atom_Mul: atom_div(a.top, bot.f)
+			case Atom_Add: atom_div(a.top, bot.f)
+			}
 
-		// fold dividing ones
-		if is_bot_num && bot_num.f == FRACTION_IDENTITY {
 			atom ^= a.top^
-			log_debug_update(constrs, "divide by one")
+			log_debug_update(constrs, "folding dividing by num")
 			updated ^= true
-			return // atom is now a num
-		}
-
-		// fold dividing nums
-		if is_top_num && is_bot_num {
-			atom ^= Atom_Num{{top_num.num * bot_num.den, top_num.den * bot_num.num}}
-			log_debug_update(constrs, "folding dividing nums")
-			updated ^= true
-			return // atom is now a num
-		}
-
-
-		top_var, is_top_var := a.top.(Atom_Var)
-		bot_var, is_bot_var := a.bot.(Atom_Var)
-
-		// fold dividing vars
-		if is_top_var && is_bot_var && top_var.name == bot_var.name {
-			atom_div(a.top, bot_var.f)
-			atom ^= a.top^
-			log_debug_update(constrs, "folding dividing vars")
-			updated ^= true
-			return // atom is now a var
+			return // atom is top atom
+			
+		case Atom_Var:
+			top_var, is_top_var := a.top.(Atom_Var)
+			
+			if is_top_var && top_var.name == bot.name {
+				atom_div(a.top, bot.f)
+				atom ^= a.top^
+				log_debug_update(constrs, "folding dividing by var")
+				updated ^= true
+				return // atom is now a var
+			}
+		case Atom_Mul, Atom_Div, Atom_Add:
+			// TODO
 		}
 	}
 
