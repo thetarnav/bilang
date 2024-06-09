@@ -241,9 +241,9 @@ write_atom :: proc (w: io.Writer, atom: Atom, highlight := true)
 		write_operator(w, "/", highlight)
 
 		fmt.wprint(w, " ")
-		write_atom(w, a.dividend^, highlight)
+		write_atom(w, a.top^, highlight)
 		fmt.wprint(w, " ")
-		write_atom(w, a.divisor^, highlight)
+		write_atom(w, a.bot^, highlight)
 
 		write_punct(w, ")", highlight)
 	}

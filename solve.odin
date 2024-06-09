@@ -56,8 +56,8 @@ Atom_Mul :: struct {
 }
 
 Atom_Div :: struct {
-	dividend: ^Atom,
-	divisor : ^Atom,
+	top: ^Atom,
+	bot: ^Atom,
 }
 
 Constraint :: struct {
@@ -107,11 +107,11 @@ atom_mul_make :: proc (lhs: Atom, rhs: Atom) -> Atom_Mul #no_bounds_check
 	return mul
 }
 
-atom_div_make :: proc (dividend: Atom, divisor: Atom) -> Atom_Div
+atom_div_make :: proc (top: Atom, bot: Atom) -> Atom_Div
 {
 	div: Atom_Div
-	div.dividend = new_atom(dividend)
-	div.divisor  = new_atom(divisor)
+	div.top = new_atom(top)
+	div.bot = new_atom(bot)
 	return div
 }
 
@@ -281,8 +281,8 @@ walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		}
 
 	case Atom_Div:
-		atom_mul_by_atom(constr.rhs, lhs.divisor^)
-		constr.lhs = lhs.dividend
+		atom_mul_by_atom(constr.rhs, lhs.bot^)
+		constr.lhs = lhs.top
 		log_debug_update(constrs, "moved lhs div to rhs")
 		updated ^= true
 	}
@@ -377,11 +377,11 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 						/*
 					    (a / b) + 3/2 -> (2a + 3b) / 2b
 						*/
-						rhs := atom_copy(v2.divisor^)
-						atom_mul(v2.dividend, {v.f.den, 1})
-						atom_mul(&rhs,        {v.f.num, 1})
-						atom_mul(v2.divisor,  {v.f.den, 1})
-						v2.dividend ^= atom_add_make(v2.dividend^, rhs)
+						rhs := atom_copy(v2.bot^)
+						atom_mul(v2.top, {v.f.den, 1})
+						atom_mul(&rhs,   {v.f.num, 1})
+						atom_mul(v2.bot, {v.f.den, 1})
+						v2.top ^= atom_add_make(v2.top^, rhs)
 					case Atom_Var, Atom_Mul:
 						continue
 					}
@@ -557,14 +557,14 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 	
 	case Atom_Div:
 
-		walk_atom(a.dividend, constr_i, constrs, updated)
-		walk_atom(a.divisor,  constr_i, constrs, updated)
+		walk_atom(a.top, constr_i, constrs, updated)
+		walk_atom(a.bot,  constr_i, constrs, updated)
 
-		dividend_num, is_dividend_num := a.dividend.(Atom_Num)
-		divisor_num,  is_divisor_num  := a.divisor .(Atom_Num)
+		top_num, is_top_num := a.top.(Atom_Num)
+		bot_num, is_bot_num := a.bot.(Atom_Num)
 
 		// fold dividing zeros
-		if is_divisor_num && divisor_num.num == 0 {
+		if is_bot_num && bot_num.num == 0 {
 			atom ^= Atom_Num{FRACTION_ZERO}
 			log_debug_update(constrs, "divide by zero")
 			updated ^= true
@@ -572,29 +572,29 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 		}
 
 		// fold dividing ones
-		if is_divisor_num && divisor_num.f == FRACTION_IDENTITY {
-			atom ^= a.dividend^
+		if is_bot_num && bot_num.f == FRACTION_IDENTITY {
+			atom ^= a.top^
 			log_debug_update(constrs, "divide by one")
 			updated ^= true
 			return // atom is now a num
 		}
 
 		// fold dividing nums
-		if is_dividend_num && is_divisor_num {
-			atom ^= Atom_Num{{dividend_num.num * divisor_num.den, dividend_num.den * divisor_num.num}}
+		if is_top_num && is_bot_num {
+			atom ^= Atom_Num{{top_num.num * bot_num.den, top_num.den * bot_num.num}}
 			log_debug_update(constrs, "folding dividing nums")
 			updated ^= true
 			return // atom is now a num
 		}
 
 
-		dividend_var, is_dividend_var := a.dividend.(Atom_Var)
-		divisor_var,  is_divisor_var  := a.divisor .(Atom_Var)
+		top_var, is_top_var := a.top.(Atom_Var)
+		bot_var, is_bot_var := a.bot.(Atom_Var)
 
 		// fold dividing vars
-		if is_dividend_var && is_divisor_var && dividend_var.name == divisor_var.name {
-			atom_div(a.dividend, divisor_var.f)
-			atom ^= a.dividend^
+		if is_top_var && is_bot_var && top_var.name == bot_var.name {
+			atom_div(a.top, bot_var.f)
+			atom ^= a.top^
 			log_debug_update(constrs, "folding dividing vars")
 			updated ^= true
 			return // atom is now a var
@@ -625,8 +625,8 @@ atom_copy :: proc (src: Atom) -> Atom
 		return a
 	case Atom_Div:
 		a := s
-		a.dividend = new_atom(atom_copy(s.dividend^))
-		a.divisor  = new_atom(atom_copy(s.divisor^))
+		a.top = new_atom(atom_copy(s.top^))
+		a.bot  = new_atom(atom_copy(s.bot^))
 		return a
 	}
 	return {}
@@ -662,10 +662,10 @@ atom_sub_by_atom :: proc (dst: ^Atom, sub: Atom)
 atom_div_by_atom :: proc (dst: ^Atom, div: Atom)
 {
 	if dst_div, dst_is_div := &dst.(Atom_Div); dst_is_div {
-		if divisor_mul, divisor_is_mul := &dst_div.divisor.(Atom_Mul); divisor_is_mul {
-			append(&divisor_mul.factors, dst_div.divisor^)
+		if bot_mul, bot_is_mul := &dst_div.bot.(Atom_Mul); bot_is_mul {
+			append(&bot_mul.factors, dst_div.bot^)
 		} else {
-			dst_div.divisor ^= atom_mul_make(dst_div.divisor^, div)
+			dst_div.bot ^= atom_mul_make(dst_div.bot^, div)
 		}
 	} else {
 		dst ^= atom_div_make(dst^, div)
@@ -706,8 +706,8 @@ atom_mul :: proc (atom: ^Atom, f: Fraction)
 			assert(len(a.factors) > 0, "empty mul")
 			atom_mul(&a.factors[0], f)
 		case Atom_Div:
-			atom_mul(a.dividend, {f.num, 1})
-			atom_mul(a.divisor,  {f.den, 1})
+			atom_mul(a.top, {f.num, 1})
+			atom_mul(a.bot, {f.den, 1})
 		}
 	}
 }
@@ -741,7 +741,7 @@ is_dividable_by_var :: proc (a: Atom, var: string) -> bool
 			if is_dividable_by_var(factor, var) do return true
 		}
 	case Atom_Div:
-		return is_dividable_by_var(v.dividend^, var) && !has_dependency(v.divisor^, var)
+		return is_dividable_by_var(v.top^, var) && !has_dependency(v.bot^, var)
 	}
 	return false
 }
@@ -765,7 +765,7 @@ atom_divide_by_var :: proc (a: ^Atom, var: string)
 			}
 		}
 	case Atom_Div:
-		atom_divide_by_var(v.dividend, var)
+		atom_divide_by_var(v.top, var)
 	}
 }
 
@@ -785,7 +785,7 @@ has_dependencies :: proc (atom: Atom) -> bool
 			if has_dependencies(factor) do return true
 		}
 	case Atom_Div:
-		return has_dependencies(a.dividend^) || has_dependencies(a.divisor^)
+		return has_dependencies(a.top^) || has_dependencies(a.bot^)
 	}
 	return false
 }
@@ -806,7 +806,7 @@ has_dependency :: proc (atom: Atom, var: string) -> bool
 			if has_dependency(factor, var) do return true
 		}
 	case Atom_Div:
-		return has_dependency(a.dividend^, var) || has_dependency(a.divisor^, var)
+		return has_dependency(a.top^, var) || has_dependency(a.bot^, var)
 	}
 	return false
 }
