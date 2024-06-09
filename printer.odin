@@ -35,6 +35,20 @@ write_number :: proc(w: io.Writer, n: f64, highlight := true)
 	if highlight do fmt.wprint(w, "\e[0m")
 }
 
+write_punct :: proc(w: io.Writer, c: string, highlight := true)
+{
+	if highlight do fmt.wprint(w, "\e[38;5;240m")
+	fmt.wprint(w, c)
+	if highlight do fmt.wprint(w, "\e[0m")
+}
+
+write_operator :: proc(w: io.Writer, c: string, highlight := true)
+{
+	if highlight do fmt.wprint(w, "\e[0;36m")
+	fmt.wprint(w, c)
+	if highlight do fmt.wprint(w, "\e[0m")
+}
+
 
 /*
 
@@ -63,11 +77,7 @@ print_decl :: proc (decl: Decl, highlight := true, fd := os.stdout)
 write_decl :: proc (w: io.Writer, decl: Decl, highlight := true)
 {
 	write_expr(w, decl.lhs, highlight)
-	fmt.wprint(w, " ")
-	if highlight do fmt.wprint(w, "\e[0;36m")
-	fmt.wprint(w, "=")
-	if highlight do fmt.wprint(w, "\e[0m")
-	fmt.wprint(w, " ")
+	write_operator(w, " = ", highlight)
 	write_expr(w, decl.rhs, highlight)
 	fmt.wprint(w, "\n")
 }
@@ -96,26 +106,21 @@ print_binary :: proc (binary: ^Expr_Binary, highlight := true, fd := os.stdout)
 }
 write_binary :: proc (w: io.Writer, binary: ^Expr_Binary, highlight := true)
 {
-	if highlight do fmt.wprint(w, "\e[38;5;240m")
-	fmt.wprint(w, "(")
-	if highlight do fmt.wprint(w, "\e[0m")
+	write_punct(w, "(", highlight)
 
-	if highlight do fmt.wprint(w, "\e[0;36m")
 	switch binary.op {
-	case .Add: fmt.wprint(w, "+")
-	case .Sub: fmt.wprint(w, "-")
-	case .Mul: fmt.wprint(w, "*")
-	case .Div: fmt.wprint(w, "/")
+	case .Add: write_operator(w, "+", highlight)
+	case .Sub: write_operator(w, "-", highlight)
+	case .Mul: write_operator(w, "*", highlight)
+	case .Div: write_operator(w, "/", highlight)
 	}
-	if highlight do fmt.wprint(w, "\e[0m")
 
 	fmt.wprint(w, " ")
 	write_expr(w, binary.lhs, highlight)
 	fmt.wprint(w, " ")
 	write_expr(w, binary.rhs, highlight)
-	if highlight do fmt.wprint(w, "\e[38;5;240m")
-	fmt.wprint(w, ")")
-	if highlight do fmt.wprint(w, "\e[0m")
+
+	write_punct(w, ")", highlight)
 }
 
 print_unary :: proc (unary: ^Expr_Unary, highlight := true, fd := os.stdout)
@@ -125,22 +130,17 @@ print_unary :: proc (unary: ^Expr_Unary, highlight := true, fd := os.stdout)
 }
 write_unary :: proc (w: io.Writer, unary: ^Expr_Unary, highlight := true)
 {	
-	if highlight do fmt.wprint(w, "\e[38;5;240m")
-	fmt.wprint(w, "(")
-	if highlight do fmt.wprint(w, "\e[0m")
+	write_punct(w, "(", highlight)
 	
-	if highlight do fmt.wprint(w, "\e[0;36m")
 	switch unary.op {
-	case .Neg: fmt.wprint(w, "-")
-	case .Pos: fmt.wprint(w, "+")
+	case .Neg: write_operator(w, "-", highlight)
+	case .Pos: write_operator(w, "+", highlight)
 	}
-	if highlight do fmt.wprint(w, "\e[0m")
 
 	fmt.wprint(w, " ")
 	write_expr(w, unary.rhs, highlight)
-	if highlight do fmt.wprint(w, "\e[38;5;240m")
-	fmt.wprint(w, ")")
-	if highlight do fmt.wprint(w, "\e[0m")
+	
+	write_punct(w, ")", highlight)
 }
 
 print_ident :: proc (ident: ^Expr_Ident, highlight := true, fd := os.stdout)
@@ -189,14 +189,10 @@ write_contraints :: proc (w: io.Writer, constrs: []Constraint, highlight := true
 {
 	for constr in constrs {
 		fmt.wprint(w, constr.var)
-		fmt.wprint(w, ": ")
+		write_punct(w, ": ", highlight)
 
 		write_atom(w, constr.lhs^, highlight)
-
-		if highlight do fmt.wprint(w, "\e[0;36m")
-		fmt.wprint(w, " = ")
-		if highlight do fmt.wprint(w, "\e[0m")
-
+		write_operator(w, " = ", highlight)
 		write_atom(w, constr.rhs^, highlight)
 
 		fmt.wprint(w, "\n")
@@ -215,32 +211,41 @@ write_atom :: proc (w: io.Writer, atom: Atom, highlight := true)
 		write_fraction(w, a, highlight)
 	case Atom_Var:
 		if a.f != FRACTION_IDENTITY {
-			write_fraction(w, a, highlight)
+			write_fraction(w, a.f, highlight)
 		}
 		
 		fmt.wprint(w, a.name)
-	case Atom_Binary:
-		if highlight do fmt.wprint(w, "\e[38;5;240m")
-		fmt.wprint(w, "(")
-		if highlight do fmt.wprint(w, "\e[0m")
+	case Atom_Add:
+		write_punct(w, "(", highlight)
+		write_operator(w, "+", highlight)
 
-		if highlight do fmt.wprint(w, "\e[0;36m")
-		switch a.op {
-		case .Add: fmt.wprint(w, "+ ")
-		case .Mul: fmt.wprint(w, "* ")
-		case .Div: fmt.wprint(w, "/ ")
+		for addend in a.addends {
+			fmt.wprint(w, " ")
+			write_atom(w, addend, highlight)
 		}
-		if highlight do fmt.wprint(w, "\e[0m")
 
-		write_atom(w, a.lhs^, highlight)
+		write_punct(w, ")", highlight)
+	case Atom_Mul:
+		write_punct(w, "(", highlight)
+		write_operator(w, "*", highlight)
+
+		for factor in a.factors {
+			fmt.wprint(w, " ")
+			write_atom(w, factor, highlight)
+		}
+
+		write_punct(w, ")", highlight)
+
+	case Atom_Div:
+		write_punct(w, "(", highlight)
+		write_operator(w, "/", highlight)
 
 		fmt.wprint(w, " ")
+		write_atom(w, a.dividend^, highlight)
+		fmt.wprint(w, " ")
+		write_atom(w, a.divisor^, highlight)
 
-		write_atom(w, a.rhs^, highlight)
-
-		if highlight do fmt.wprint(w, "\e[38;5;240m")
-		fmt.wprint(w, ")")
-		if highlight do fmt.wprint(w, "\e[0m")
+		write_punct(w, ")", highlight)
 	}
 }
 
