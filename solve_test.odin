@@ -101,7 +101,13 @@ import test "core:testing"
 			"b: b = (/ (+ -c (* -a x)) y)\n"+
 			"y: y = (/ (+ -c (* -a x)) b)\n"+
 			"c: c = (+ (* -a x) (* -b y))\n",
-		}
+		},
+		{
+			"2*x + 4*y = 0\n",
+
+			"x: x = -2y\n"+
+			"y: y = -0.5x\n"
+		},
 	}
 
 	@static arena_buf: [mem.Megabyte]byte
