@@ -79,6 +79,20 @@ import test "core:testing"
 			"n: n = (/ (+ -9.5 2x) (+ 3.5 -2x))\n"+
 			"x: x = (/ (+ 7n 19) (+ 4n 4))\n",
 		},
+		{
+			"a*b = 0\n",
+
+			"a: a = 0\n"+
+			"b: b = 0\n",
+			// TODO: this is not true, it's EITHER a = 0 OR b = 0
+		},
+		{
+			"a/b = 0\n",
+
+			"a: a = 0\n"+
+			"b: 0 = 0\n",
+			// TODO: b != 0
+		}
 	}
 
 	@static arena_buf: [mem.Megabyte]byte

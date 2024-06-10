@@ -325,6 +325,9 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 		// a.num /= a.den
 
 	case Atom_Var:
+		// leave substitution as last step
+		if updated^ do break
+
 		constr := &constrs[constr_i]
 
 		if a.name == constr.var do break
@@ -588,6 +591,13 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 			}
 		case Atom_Mul, Atom_Div, Atom_Add:
 			// TODO
+		}
+
+		// 0/x -> 0
+		if top_num, is_top_num := a.top.(Atom_Num); is_top_num && top_num.f.num == 0 {
+			atom ^= Atom_Num{FRACTION_ZERO}
+			log_debug_update(constrs, "dividing zero")
+			updated ^= true
 		}
 	}
 
