@@ -210,7 +210,12 @@ write_atom :: proc (w: io.Writer, atom: Atom, highlight := true)
 	case Atom_Num:
 		write_fraction(w, a, highlight)
 	case Atom_Var:
-		if a.f != FRACTION_IDENTITY {
+		switch a.f.num / a.f.den {
+		case 1:
+			// do nothing
+		case -1:
+			write_operator(w, "-", highlight)
+		case:
 			write_fraction(w, a.f, highlight)
 		}
 		

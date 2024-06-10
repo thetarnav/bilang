@@ -92,6 +92,15 @@ import test "core:testing"
 			"a: a = 0\n"+
 			"b: 0 = 0\n",
 			// TODO: b != 0
+		},
+		{
+			"a*x + b*y + c = 0\n",
+
+			"a: a = (/ (+ -c (* -b y)) x)\n"+
+			"x: x = (/ (+ -c (* -b y)) a)\n"+
+			"b: b = (/ (+ -c (* -a x)) y)\n"+
+			"y: y = (/ (+ -c (* -a x)) b)\n"+
+			"c: c = (+ (* -a x) (* -b y))\n",
 		}
 	}
 
