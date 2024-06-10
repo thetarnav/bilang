@@ -1,8 +1,10 @@
-package bilang
+package cli
 
 import "core:fmt"
 import "core:os"
 import "core:mem"
+
+import bilang "src"
 
 
 main :: proc ()
@@ -36,19 +38,19 @@ a     = -4 + 2
 	parser_scratch: mem.Scratch_Allocator
 	mem.scratch_allocator_init(&parser_scratch, 1024)
 
-	decls, err := parse_src(language_input, mem.scratch_allocator(&parser_scratch))
+	decls, err := bilang.parse_src(language_input, mem.scratch_allocator(&parser_scratch))
 
 	if err != nil {
-		fmt.print(parser_error_to_string(language_input, err, context.temp_allocator))
+		fmt.print(bilang.parser_error_to_string(language_input, err, context.temp_allocator))
 		os.exit(1)
 	}
 
-	print_decls(decls)
+	bilang.print_decls(decls)
 
-	constrs := solve(decls)
+	constrs := bilang.solve(decls)
 
 	fmt.print("\n-------\n\n")
-	print_contraints(constrs)
+	bilang.print_contraints(constrs)
 
 	mem.scratch_allocator_destroy(&parser_scratch)
 }

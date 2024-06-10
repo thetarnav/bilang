@@ -1,0 +1,15 @@
+{
+	"name": "bilang",
+	"author": "Damian Tarnawski <gthetarnav@gmail.com>",
+	"license": "MIT",
+	"private": true,
+	"type": "module",
+	"scripts": {},
+	"devDependencies": {
+		"typescript": "^5.4.5"
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"packageManager": "npm@10.8.1+sha256.b8807aebb9656758e2872fa6e7c564b506aa2faa9297439a478d471d2fe32483"
+}
