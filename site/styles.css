@@ -44,8 +44,21 @@ STYLES
 */
 
 :root {
-	--dark: #333;
-	--light: #f6eee0;
+	--og_dark: #081c15;
+	--og_light: #d8f3dc;
+	--og_accent: #f4a261;
+
+	--dark: var(--og_dark);
+	--light: var(--og_light);
+	--accent: var(--og_accent);
+}
+
+/* switch dark and light if prefers dark */
+@media (prefers-color-scheme: dark) {
+	:root {
+		--dark: var(--og_light);
+		--light: var(--og_dark);
+	}
 }
 
 body {
@@ -91,11 +104,16 @@ textarea {
 	resize: none;
 	padding: 1rem;
 	font-size: 1rem;
-	border: 4px solid var(--dark);
+	border: 4.2px solid var(--dark);
 	border-radius: 0.5rem;
 	color: var(--dark);
 	font-family: 'Roboto Mono', monospace;
 	background-color: var(--light);
+}
+
+textarea:focus {
+	outline: none;
+	border-color: var(--accent);
 }
 
 svg {
