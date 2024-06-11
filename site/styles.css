@@ -61,9 +61,15 @@ STYLES
 	}
 }
 
+*::selection {
+	background-color: var(--accent);
+	color: var(--light);
+}
+
 body {
 	font-family: 'Roboto', sans-serif;
 	background-color: var(--light);
+	color: var(--dark);
 }
 
 .github-link {
@@ -109,6 +115,7 @@ textarea {
 	color: var(--dark);
 	font-family: 'Roboto Mono', monospace;
 	background-color: var(--light);
+	caret-color: var(--accent);
 }
 
 textarea:focus {
@@ -129,7 +136,7 @@ path, line {
 }
 
 .arrow {
-	margin-top: 2rem;
+	margin-top: 2.6rem;
 	width: 50%;
 }
 
