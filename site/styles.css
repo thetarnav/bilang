@@ -39,14 +39,19 @@ p, h1, h2, h3, h4, h5, h6 {
 	isolation: isolate;
 }
 
-body {
-	font-family: 'Roboto', sans-serif;
-	background-color: #f6eee0
-}
-
 /*
 STYLES
 */
+
+:root {
+	--dark: #333;
+	--light: #f6eee0;
+}
+
+body {
+	font-family: 'Roboto', sans-serif;
+	background-color: var(--light);
+}
 
 .github-link {
 	position: fixed;
@@ -54,4 +59,62 @@ STYLES
 	right: 0;
 }
 
+body {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	height: 100vh;
+}
 
+main {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	width: 90vw;
+	max-width: 800px;
+}
+
+.row {
+	flex-grow: 1;
+	width: 100%;
+	display: flex;
+	gap: 2rem;
+	align-items: center;
+}
+
+textarea {
+	flex-grow: 1;
+	width: 100%;
+	height: 16rem;
+	max-height: 100vh;
+	resize: none;
+	padding: 1rem;
+	font-size: 1rem;
+	border: 4px solid var(--dark);
+	border-radius: 0.5rem;
+	color: var(--dark);
+	font-family: 'Roboto Mono', monospace;
+	background-color: var(--light);
+}
+
+svg {
+	overflow: visible;
+}
+
+path, line {
+	stroke-linecap: round;
+	fill: none;
+	stroke: var(--dark);
+	vector-effect: non-scaling-stroke;
+	stroke-width: 4px;
+}
+
+.arrow {
+	margin-top: 2rem;
+	width: 50%;
+}
+
+.arrow .arrow-head {
+    stroke-width: 2px;
+}
