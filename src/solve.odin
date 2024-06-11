@@ -487,21 +487,11 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 			
 			case Atom_Var:
 				
+				// TODO
 				// fold multiplying same vars
-				for &factor2, j in a.factors {
-					if j == i do continue
-
-					var2 := (&factor2.(Atom_Var)) or_continue
-					(v.name == var2.name) or_continue
-					
-					var2.f = fraction_product(var2.f, v.f)
-					unordered_remove(&a.factors, i)
-		
-					log_debug_update(constrs, "folding vars")
-					updated ^= true
-
-					break
-				}
+				// square
+				// this brings up imaginary numbers
+				// e.g. (a * a = -1) ????
 			
 			case Atom_Add, Atom_Mul, Atom_Div:
 				// TODO
