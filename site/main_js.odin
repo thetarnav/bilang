@@ -1,6 +1,5 @@
 package site
 
-import "core:fmt"
 import "core:mem"
 
 import bilang "../src"
@@ -24,8 +23,6 @@ solve_buffer: [mem.Megabyte]byte
 
 	input := string(input_buffer[:input_len])
 
-	fmt.println("input: ", input)
-
 	decls, parse_err := bilang.parse_src(input, context.temp_allocator)
 
 	if parse_err != nil {
@@ -34,11 +31,7 @@ solve_buffer: [mem.Megabyte]byte
 		return
 	}
 
-	fmt.println("parsed", decls)
-
 	constrs := bilang.solve(decls, context.temp_allocator)
-
-	fmt.println("solved", constrs)
 
 	constrs_str, alloc_err := bilang.contraints_to_string(constrs, highlight=false, allocator=context.temp_allocator)
 
@@ -46,8 +39,6 @@ solve_buffer: [mem.Megabyte]byte
 		output("Error: failed to allocate memory for output")
 		return
 	}
-
-	fmt.println("output: ", constrs_str)
 
 	output(constrs_str)
 }
