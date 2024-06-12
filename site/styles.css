@@ -143,3 +143,15 @@ path, line {
 .arrow .arrow-head {
     stroke-width: 2px;
 }
+
+
+@media (max-width: 600px) {
+	/* row -> col */
+	.row {
+		flex-direction: column;
+	}
+	/* hide arrow */
+	.arrow {
+		display: none;
+	}
+}
