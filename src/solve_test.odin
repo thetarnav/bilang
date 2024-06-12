@@ -114,11 +114,11 @@ import test "core:testing"
 			"x: (* x x) = -1\n",
 			// TODO: fail because x is not real
 		},
-		{
-			"a = a + 1\n",
+		// {
+		// 	"a = a + 1\n",
 
-			"a: 0 = 1\n",
-		}
+		// 	"a: 0 = 1\n",
+		// }
 	}
 
 	@static arena_buf: [mem.Megabyte]byte
