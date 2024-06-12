@@ -44,11 +44,11 @@ export function initWasmState(state, src_instance) {
 /**
  * @param   {ArrayBufferLike} buffer
  * @param   {number}          ptr
- * @param   {number}          len
+ * @param   {number | BigInt} len
  * @returns {string}
  */
 export const load_string_raw = (buffer, ptr, len) => {
-	const bytes = new Uint8Array(buffer, ptr, len)
+	const bytes = new Uint8Array(buffer, ptr, Number(len))
 	return new TextDecoder().decode(bytes)
 }
 
@@ -102,8 +102,7 @@ export function makeOdinEnv(wasm) {
 		 * @returns {void}
 		 */
 		write: (fd, ptr, len) => {
-			const str = load_string_raw(wasm.memory.buffer, ptr, len)
-			writeToConsole(fd, str)
+			writeToConsole(fd, load_string_raw(wasm.memory.buffer, ptr, len))
 		},
 		/** @returns {never} */
 		trap: () => {
@@ -115,8 +114,7 @@ export function makeOdinEnv(wasm) {
 		 * @returns {void}
 		 */
 		alert: (ptr, len) => {
-			const str = load_string_raw(wasm.memory.buffer, ptr, len)
-			alert(str)
+			alert(load_string_raw(wasm.memory.buffer, ptr, len))
 		},
 		/** @returns {never} */
 		abort: () => {
@@ -128,8 +126,7 @@ export function makeOdinEnv(wasm) {
 		 * @returns {void}
 		 */
 		evaluate: (ptr, len) => {
-			const str = load_string_raw(wasm.memory.buffer, ptr, len)
-			void eval.call(null, str)
+			void eval.call(null, load_string_raw(wasm.memory.buffer, ptr, len))
 		},
 		/** @returns {bigint} */
 		time_now: () => BigInt(Date.now()),

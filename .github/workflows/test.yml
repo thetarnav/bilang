@@ -19,4 +19,7 @@ jobs:
           release: latest
 
       - name: Run Tests
-        run: odin test . -error-pos-style:unix
+        run: ./cmd.sh test
+
+      - name: Build site wasm
+        run: ./cmd.sh build_wasm

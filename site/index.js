@@ -48,7 +48,7 @@ console.log("WASM memory:", exports.memory)
 Main
 */
 
-// exports._start() // Calls main
+exports._start() // Calls main
 // const odin_ctx = exports.default_context_ptr()
 /* _end() should be called when the program is done */
 // exports._end()
