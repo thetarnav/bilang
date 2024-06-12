@@ -182,7 +182,7 @@ contraints_to_string :: proc (constrs: []Constraint, highlight := true, allocato
 	b := strings.builder_make_len_cap(0, 1024, allocator) or_return
 	w := strings.to_writer(&b)
 
-	write_contraints(w, constrs)
+	write_contraints(w, constrs, highlight)
 
 	return strings.to_string(b), nil
 }
