@@ -3,18 +3,23 @@
 case "$1" in
 	test)
 		echo "Running test"
+		shift
 		# -define:ODIN_TEST_NAMES=bilang.test_solver
 		odin test src \
 			-error-pos-style:unix \
 			-define:ODIN_TEST_LOG_LEVEL=warning \
-			-define:ODIN_TEST_FANCY=false
+			-define:ODIN_TEST_FANCY=false \
+			"$@"
 		;;
 	build_wasm)
 		echo "Building wasm"
+		shift
 		odin build site \
 			-target:js_wasm64p32 \
 			-out:site/_main.wasm \
-			-error-pos-style:unix
+			-no-entry-point \
+			-error-pos-style:unix \
+			"$@"
 		;;
 	*)
 		# Default case when no matching script is found

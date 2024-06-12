@@ -1,31 +1,18 @@
 import * as odin_env from "./odin_env.js"
 
+
 /**
- * @typedef  {object}                   Example_Exports
- * @property {Example_Start           } start
- * @property {Example_Frame           } frame
- * @property {Example_On_Window_Resize} on_window_resize
+ * @typedef  {object} Example_Exports
+ * @property {(len: bigint) => void} solve
+ * @property {() => number}          get_input_ptr
+ * @property {() => bigint}          get_input_len
  *
  * @typedef {odin_env.Odin_Exports & Example_Exports} Wasm_Exports
- *
- * @callback Example_Start
- * @param   {number} ctx_ptr
- * @returns {number}
- *
- * @callback Example_Frame
- * @param   {number} ctx_ptr
- * @param   {number} delta
- * @returns {void  }
- *
- * @callback Example_On_Window_Resize
- * @param   {number} window_w
- * @param   {number} window_h
- * @param   {number} canvas_w
- * @param   {number} canvas_h
- * @param   {number} canvas_x
- * @param   {number} canvas_y
- * @returns {void  }
  */
+
+
+const textarea_input  = /** @type {HTMLTextAreaElement} */ (document.getElementById("input"))
+const textarea_output = /** @type {HTMLTextAreaElement} */ (document.getElementById("output"))
 
 /** @type {odin_env.Wasm_State} */
 const wasm_state  = {
@@ -34,7 +21,17 @@ const wasm_state  = {
 }
 
 const src_instance = await odin_env.fetchInstanciateWasm("_main.wasm", {
-	env: {}, // TODO
+	env: {
+		/**
+		 * @param {number} ptr 
+		 * @param {bigint} len
+		 */
+		output(ptr, len) {
+			let output = odin_env.load_string_raw(wasm_state.memory.buffer, ptr, len)
+			console.log("Output:", output)
+			textarea_output.value = output
+		},
+	}, // TODO
 	odin_env: odin_env  .makeOdinEnv    (wasm_state),
 })
 
@@ -44,26 +41,22 @@ const exports = /** @type {Wasm_Exports} */ (wasm_state.exports)
 console.log("WASM exports:", exports)
 console.log("WASM memory:", exports.memory)
 
-/*
-Main
-*/
+textarea_input.value =
+	"10 = a + b\n"+
+	"a = -4 + 2\n"
 
-exports._start() // Calls main
-// const odin_ctx = exports.default_context_ptr()
-/* _end() should be called when the program is done */
-// exports._end()
+function on_input() {
+	let input = textarea_input.value
+	let buffer_ptr = exports.get_input_ptr()
+	let buffer_len = exports.get_input_len()
+	
+	let input_buffer = new Uint8Array(wasm_state.memory.buffer, buffer_ptr, Number(buffer_len))
+	let encoded = new TextEncoder().encode(input)
+	input_buffer.set(encoded)
+	
+	exports.solve(BigInt(encoded.length))
+}
 
-// const ok = exports.start(odin_ctx)
-// if (!ok) throw Error("Failed to start example")
+textarea_input.addEventListener("input", on_input)
 
-// void requestAnimationFrame(prev_time => {
-// 	/** @type {FrameRequestCallback} */
-// 	const frame = time => {
-// 		const delta = time - prev_time
-// 		prev_time = time
-// 		exports.frame(odin_ctx, delta)
-// 		void requestAnimationFrame(frame)
-// 	}
-
-// 	void requestAnimationFrame(frame)
-// })
+on_input()

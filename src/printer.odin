@@ -176,6 +176,7 @@ print_contraints :: proc (constrs: []Constraint, highlight := true, fd := os.std
 	w := _scope_handle_writer(fd)
 	write_contraints(w^, constrs, highlight)
 }
+@(require_results)
 contraints_to_string :: proc (constrs: []Constraint, highlight := true, allocator := context.allocator) -> (s: string, err: mem.Allocator_Error)
 {
 	b := strings.builder_make_len_cap(0, 1024, allocator) or_return

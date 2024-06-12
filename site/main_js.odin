@@ -1,32 +1,53 @@
 package site
 
 import "core:fmt"
+import "core:mem"
 
 import bilang "../src"
 
+foreign import "env"
 
-main :: proc () {
-	language_input := `
-a + b = 10
-a     = -4 + 2
-`
+foreign env {
+	output :: proc "contextless" (string) ---
+}
 
-	// parser_scratch: mem.Scratch_Allocator
-	// mem.scratch_allocator_init(&parser_scratch, 1024)
+input_buffer: [mem.Megabyte]byte
+solve_buffer: [mem.Megabyte]byte
 
-	decls, err := bilang.parse_src(language_input)
+@export get_input_ptr :: proc () -> [^]byte {return raw_data(input_buffer[:])}
+@export get_input_len :: proc () -> int     {return len(input_buffer)}
 
-	if err != nil {
-		fmt.eprint(bilang.parser_error_to_string(language_input, err, context.temp_allocator))
+@export solve :: proc (input_len: int)
+{
+	solve_arena := mem.Arena{data = solve_buffer[:]}
+	context.temp_allocator = mem.arena_allocator(&solve_arena)
+
+	input := string(input_buffer[:input_len])
+
+	fmt.println("input: ", input)
+
+	decls, parse_err := bilang.parse_src(input, context.temp_allocator)
+
+	if parse_err != nil {
+		err_str := bilang.parser_error_to_string(input, parse_err, context.temp_allocator)
+		output(err_str)
 		return
 	}
 
-	// bilang.print_decls(decls)
+	fmt.println("parsed", decls)
 
-	constrs := bilang.solve(decls)
+	constrs := bilang.solve(decls, context.temp_allocator)
 
-	fmt.print("\n-------\n\n")
-	// bilang.print_contraints(constrs)
+	fmt.println("solved", constrs)
 
-	// mem.scratch_allocator_destroy(&parser_scratch)
+	constrs_str, alloc_err := bilang.contraints_to_string(constrs, highlight=false, allocator=context.temp_allocator)
+
+	if alloc_err != nil {
+		output("Error: failed to allocate memory for output")
+		return
+	}
+
+	fmt.println("output: ", constrs_str)
+
+	output(constrs_str)
 }
