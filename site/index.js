@@ -27,11 +27,9 @@ const src_instance = await odin_env.fetchInstanciateWasm("_main.wasm", {
 		 * @param {bigint} len
 		 */
 		output(ptr, len) {
-			let output = odin_env.load_string_raw(wasm_state.memory.buffer, ptr, len)
-			console.log("Output:", output)
-			textarea_output.value = output
+			textarea_output.value = odin_env.load_string_raw(wasm_state.memory.buffer, ptr, len)
 		},
-	}, // TODO
+	},
 	odin_env: odin_env  .makeOdinEnv    (wasm_state),
 })
 
@@ -41,9 +39,9 @@ const exports = /** @type {Wasm_Exports} */ (wasm_state.exports)
 console.log("WASM exports:", exports)
 console.log("WASM memory:", exports.memory)
 
-textarea_input.value =
-	"10 = a + b\n"+
-	"a = -4 + 2\n"
+textarea_input.value = localStorage.getItem("input") ||
+	"(4*n + 10) / (n + 1) = 3*x\n"+
+	"2*x = 6\n"
 
 function on_input() {
 	let input = textarea_input.value
@@ -55,6 +53,8 @@ function on_input() {
 	input_buffer.set(encoded)
 	
 	exports.solve(BigInt(encoded.length))
+
+	localStorage.setItem("input", input)
 }
 
 textarea_input.addEventListener("input", on_input)
