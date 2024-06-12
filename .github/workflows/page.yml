@@ -1,0 +1,42 @@
+name: Deploy site
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: laytan/setup-odin@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build site wasm
+        run: ./cmd.sh build_wasm
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
+    permissions:
+      pages: write # to deploy to Pages
+      id-token: write # to verify the deployment originates from an appropriate source
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
