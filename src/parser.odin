@@ -208,9 +208,8 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) #no_bounds_che
 		parser_next_token(p)
 		bin.rhs = parse_expr_atom(p) or_return
 	
+		bin_expr := bin
 		bin_last := bin
-		op_last  := op
-		
 		expr = bin
 	
 		for {
@@ -224,16 +223,21 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) #no_bounds_che
 			parser_next_token(p)
 			bin.rhs = parse_expr_atom(p) or_return
 	
-			if precedence_table[op_last] >= precedence_table[op] {
-				bin.lhs = expr
-				expr    = bin
+			if precedence_table[op] <= precedence_table[bin_last.op] {
+				if precedence_table[op] <= precedence_table[bin_expr.op] {
+					bin.lhs  = expr
+					expr     = bin
+					bin_expr = bin
+				} else {
+					bin.lhs      = bin_expr.rhs
+					bin_expr.rhs = bin
+				}
 			} else {
 				bin.lhs      = bin_last.rhs
 				bin_last.rhs = bin
 			}
 			
 			bin_last = bin
-			op_last  = op
 		}
 	}
 
