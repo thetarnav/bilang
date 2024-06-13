@@ -1,10 +1,10 @@
 package bilang
 
-import "core:fmt"
 import "core:mem"
 import "core:io"
 import "core:os"
 import "core:strings"
+import "core:strconv"
 import "core:bufio"
 
 
@@ -26,27 +26,43 @@ _scope_handle_writer_flush :: proc (w: ^io.Writer)
 	bufio.writer_flush(cast(^bufio.Writer)w.data) // writer_to_writer decls w.data to the bufio.Writer
 }
 
+@(private)
+_write_f64 :: proc(w: io.Writer, val: f64, n_written: ^int = nil) -> (n: int, err: io.Error) {
+	buf: [386]byte
 
+	str := strconv.append_float(buf[1:], val, 'g', 2*size_of(val), 8*size_of(val))
+	s := buf[:len(str)+1]
+	if s[1] == '+' || s[1] == '-' {
+		s = s[1:]
+	} else {
+		s[0] = '+'
+	}
+	if s[0] == '+' {
+		s = s[1:]
+	}
+
+	return io.write_string(w, string(s), n_written)
+}	
 
 write_number :: proc(w: io.Writer, n: f64, highlight := true)
 {
-	if highlight do fmt.wprint(w, "\e[0;33m")
-	fmt.wprint(w, n)
-	if highlight do fmt.wprint(w, "\e[0m")
+	if highlight do io.write_string(w, "\e[0;33m")
+	_write_f64(w, n)
+	if highlight do io.write_string(w, "\e[0m")
 }
 
 write_punct :: proc(w: io.Writer, c: string, highlight := true)
 {
-	if highlight do fmt.wprint(w, "\e[38;5;240m")
-	fmt.wprint(w, c)
-	if highlight do fmt.wprint(w, "\e[0m")
+	if highlight do io.write_string(w, "\e[38;5;240m")
+	io.write_string(w, c)
+	if highlight do io.write_string(w, "\e[0m")
 }
 
 write_operator :: proc(w: io.Writer, c: string, highlight := true)
 {
-	if highlight do fmt.wprint(w, "\e[0;36m")
-	fmt.wprint(w, c)
-	if highlight do fmt.wprint(w, "\e[0m")
+	if highlight do io.write_string(w, "\e[0;36m")
+	io.write_string(w, c)
+	if highlight do io.write_string(w, "\e[0m")
 }
 
 
@@ -79,7 +95,7 @@ write_decl :: proc (w: io.Writer, decl: Decl, highlight := true)
 	write_expr(w, decl.lhs, highlight)
 	write_operator(w, " = ", highlight)
 	write_expr(w, decl.rhs, highlight)
-	fmt.wprint(w, "\n")
+	io.write_string(w, "\n")
 }
 
 print_expr :: proc (expr: Expr, highlight := true, fd := os.stdout)
@@ -115,9 +131,9 @@ write_binary :: proc (w: io.Writer, binary: ^Expr_Binary, highlight := true)
 	case .Div: write_operator(w, "/", highlight)
 	}
 
-	fmt.wprint(w, " ")
+	io.write_string(w, " ")
 	write_expr(w, binary.lhs, highlight)
-	fmt.wprint(w, " ")
+	io.write_string(w, " ")
 	write_expr(w, binary.rhs, highlight)
 
 	write_punct(w, ")", highlight)
@@ -137,7 +153,7 @@ write_unary :: proc (w: io.Writer, unary: ^Expr_Unary, highlight := true)
 	case .Pos: write_operator(w, "+", highlight)
 	}
 
-	fmt.wprint(w, " ")
+	io.write_string(w, " ")
 	write_expr(w, unary.rhs, highlight)
 	
 	write_punct(w, ")", highlight)
@@ -150,7 +166,7 @@ print_ident :: proc (ident: ^Expr_Ident, highlight := true, fd := os.stdout)
 }
 write_ident :: proc (w: io.Writer, ident: ^Expr_Ident, highlight := true)
 {
-	fmt.wprint(w, ident.name)
+	io.write_string(w, ident.name)
 }
 
 print_number :: proc (number: ^Expr_Number, highlight := true, fd := os.stdout)
@@ -189,14 +205,14 @@ contraints_to_string :: proc (constrs: []Constraint, highlight := true, allocato
 write_contraints :: proc (w: io.Writer, constrs: []Constraint, highlight := true)
 {
 	for constr in constrs {
-		fmt.wprint(w, constr.var)
+		io.write_string(w, constr.var)
 		write_punct(w, ": ", highlight)
 
 		write_atom(w, constr.lhs^, highlight)
 		write_operator(w, " = ", highlight)
 		write_atom(w, constr.rhs^, highlight)
 
-		fmt.wprint(w, "\n")
+		io.write_string(w, "\n")
 	}
 }
 
@@ -220,13 +236,13 @@ write_atom :: proc (w: io.Writer, atom: Atom, highlight := true)
 			write_fraction(w, a.f, highlight)
 		}
 		
-		fmt.wprint(w, a.name)
+		io.write_string(w, a.name)
 	case Atom_Add:
 		write_punct(w, "(", highlight)
 		write_operator(w, "+", highlight)
 
 		for addend in a.addends {
-			fmt.wprint(w, " ")
+			io.write_string(w, " ")
 			write_atom(w, addend, highlight)
 		}
 
@@ -236,7 +252,7 @@ write_atom :: proc (w: io.Writer, atom: Atom, highlight := true)
 		write_operator(w, "*", highlight)
 
 		for factor in a.factors {
-			fmt.wprint(w, " ")
+			io.write_string(w, " ")
 			write_atom(w, factor, highlight)
 		}
 
@@ -246,9 +262,9 @@ write_atom :: proc (w: io.Writer, atom: Atom, highlight := true)
 		write_punct(w, "(", highlight)
 		write_operator(w, "/", highlight)
 
-		fmt.wprint(w, " ")
+		io.write_string(w, " ")
 		write_atom(w, a.top^, highlight)
-		fmt.wprint(w, " ")
+		io.write_string(w, " ")
 		write_atom(w, a.bot^, highlight)
 
 		write_punct(w, ")", highlight)
@@ -264,20 +280,20 @@ write_fraction :: proc(w: io.Writer, f: Fraction, highlight := true)
 	// 	write_number(w, f.num, highlight)
 	// }
 	// else {
-	// 	if highlight do fmt.wprint(w, "\e[38;5;240m")
-	// 	fmt.wprint(w, "(")
-	// 	if highlight do fmt.wprint(w, "\e[0m")
+	// 	if highlight do io.write_string(w, "\e[38;5;240m")
+	// 	io.write_string(w, "(")
+	// 	if highlight do io.write_string(w, "\e[0m")
 
 	// 	write_number(w, f.num, highlight)
 
-	// 	if highlight do fmt.wprint(w, "\e[0;36m")
-	// 	fmt.wprint(w, "/")
-	// 	if highlight do fmt.wprint(w, "\e[0m")
+	// 	if highlight do io.write_string(w, "\e[0;36m")
+	// 	io.write_string(w, "/")
+	// 	if highlight do io.write_string(w, "\e[0m")
 
 	// 	write_number(w, f.den, highlight)
 
-	// 	if highlight do fmt.wprint(w, "\e[38;5;240m")
-	// 	fmt.wprint(w, ")")
-	// 	if highlight do fmt.wprint(w, "\e[0m")
+	// 	if highlight do io.write_string(w, "\e[38;5;240m")
+	// 	io.write_string(w, ")")
+	// 	if highlight do io.write_string(w, "\e[0m")
 	// }
 }
