@@ -2,28 +2,6 @@ package bilang
 
 import "core:log"
 
-@(disabled=!ODIN_DEBUG)
-log_debug :: #force_inline proc (args: ..any, sep := " ", location := #caller_location)
-{
-	log.debug(..args, sep=sep, location=location)
-}
-@(disabled=!ODIN_DEBUG)
-log_debugf :: #force_inline proc (fmt_str: string, args: ..any, location := #caller_location)
-{
-	log.debugf(fmt_str, ..args, location=location)
-}
-@(disabled=!ODIN_DEBUG)
-log_debug_update :: proc (constrs: []Constraint, title := "updated", alloc := context.temp_allocator, location := #caller_location)
-{
-	output, err := contraints_to_string(constrs)
-
-	if err != nil {
-		log_debugf("%s: failed to print constraints: %v", title, err, location=location)
-	} else {
-		log_debugf("%s:\n%s", title, output, location=location)
-	}
-}
-
 
 Atom :: union #no_nil {
 	Atom_Num,
@@ -601,14 +579,14 @@ atom_copy :: proc (src: Atom) -> Atom
 	case Atom_Var: return s
 	case Atom_Add:
 		a := s
-		a.addends = make([dynamic]Atom, len(s.addends), len(s.addends))
+		a.addends = make([dynamic]Atom, len(s.addends))
 		for addend, i in s.addends {
 			a.addends[i] = atom_copy(addend)
 		}
 		return a
 	case Atom_Mul:
 		a := s
-		a.factors = make([dynamic]Atom, len(s.factors), len(s.factors))
+		a.factors = make([dynamic]Atom, len(s.factors))
 		for factor, i in s.factors {
 			a.factors[i] = atom_copy(factor)
 		}
@@ -616,7 +594,7 @@ atom_copy :: proc (src: Atom) -> Atom
 	case Atom_Div:
 		a := s
 		a.top = new_atom(atom_copy(s.top^))
-		a.bot  = new_atom(atom_copy(s.bot^))
+		a.bot = new_atom(atom_copy(s.bot^))
 		return a
 	}
 	return {}
