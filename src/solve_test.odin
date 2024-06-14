@@ -76,8 +76,8 @@ import test "core:testing"
 		{
 			"(4*n + 10) / (n + 1) = 2*x + 1/2\n",
 
-			"n: n = (/ (+ -9.5 2x) (+ 3.5 -2x))\n"+
-			"x: x = (/ (+ 7n 19) (+ 4n 4))\n",
+			"n: n = (-9.5 + 2x) / (3.5 + -2x)\n"+
+			"x: x = (7n + 19) / (4n + 4)\n",
 		},
 		{
 			"a*b = 0\n",
@@ -96,11 +96,11 @@ import test "core:testing"
 		{
 			"a*x + b*y + c = 0\n",
 
-			"a: a = (/ (+ -c (* -b y)) x)\n"+
-			"x: x = (/ (+ -c (* -b y)) a)\n"+
-			"b: b = (/ (+ -c (* -a x)) y)\n"+
-			"y: y = (/ (+ -c (* -a x)) b)\n"+
-			"c: c = (+ (* -a x) (* -b y))\n",
+			"a: a = (-c + (-b * y)) / x\n"+
+			"x: x = (-c + (-b * y)) / a\n"+
+			"b: b = (-c + (-a * x)) / y\n"+
+			"y: y = (-c + (-a * x)) / b\n"+
+			"c: c = (-a * x) + (-b * y)\n",
 		},
 		{
 			"2*x + 4*y = 0\n",
@@ -111,7 +111,7 @@ import test "core:testing"
 		{
 			"x * x = -1\n",
 
-			"x: (* x x) = -1\n",
+			"x: x * x = -1\n",
 			// TODO: fail because x is not real
 		},
 		// {
@@ -149,7 +149,7 @@ import test "core:testing"
 		b := strings.builder_make_len_cap(0, 1024)
 		w := strings.to_writer(&b)
 	
-		write_contraints(w, constrs, false)
+		write_contraints(w, constrs)
 	
 		output := strings.to_string(b)
 
@@ -157,12 +157,12 @@ import test "core:testing"
 
 			strings.builder_reset(&b) // makes output unusable !!!
 
-			write_contraints(w, constrs)
+			write_contraints(w, constrs, highlight=true)
 			output_pretty := strings.clone(strings.to_string(b))
 
 			strings.builder_reset(&b)
 
-			write_decls(w, decls)
+			write_decls(w, decls, highlight=true)
 			decls_pretty := strings.clone(strings.to_string(b))
 
 			log.errorf(

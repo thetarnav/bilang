@@ -77,7 +77,7 @@ import test "core:testing"
 		b := strings.builder_make_len_cap(0, 1024)
 		w := strings.to_writer(&b)
 	
-		write_decls(w, decls, false)
+		write_decls(w, decls)
 	
 		output := strings.to_string(b)
 
@@ -85,7 +85,7 @@ import test "core:testing"
 
 			strings.builder_reset(&b) // makes output unusable !!!
 
-			write_decls(w, decls)
+			write_decls(w, decls, highlight=true)
 			output_pretty := strings.clone(strings.to_string(b))
 
 			log.errorf(

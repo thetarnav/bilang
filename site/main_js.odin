@@ -33,7 +33,7 @@ solve_buffer: [mem.Megabyte]byte
 
 	constrs := bilang.solve(decls, context.temp_allocator)
 
-	constrs_str, alloc_err := bilang.contraints_to_string(constrs, highlight=false, allocator=context.temp_allocator)
+	constrs_str, alloc_err := bilang.contraints_to_string(constrs, allocator=context.temp_allocator)
 
 	if alloc_err != nil {
 		output("Error: failed to allocate memory for output")
