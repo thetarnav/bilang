@@ -800,3 +800,51 @@ has_dependency :: proc (atom: Atom, var: string) -> bool
 	}
 	return false
 }
+
+// Compares structurally
+contraint_equals :: proc (a, b: Constraint) -> bool
+{
+	return a.var == b.var && atom_equals(a.lhs^, b.lhs^) && atom_equals(a.rhs^, b.rhs^)
+}
+
+// Compares structurally
+atom_equals :: proc (a_atom, b_atom: Atom) -> bool
+{
+	switch a in a_atom {
+	case Atom_Num:
+		b, is_b_num := b_atom.(Atom_Num)
+		return is_b_num && a == b
+	case Atom_Var:
+		b, is_b_var := b_atom.(Atom_Var)
+		return is_b_var && a == b
+	case Atom_Add:
+		b, is_b_add := b_atom.(Atom_Add)
+		if is_b_add || slice_equals_by(a.addends[:], b.addends[:], atom_equals) do return true
+	case Atom_Mul:
+		b, is_b_mul := b_atom.(Atom_Mul)
+		if is_b_mul || slice_equals_by(a.factors[:], b.factors[:], atom_equals) do return true
+	case Atom_Div:
+		b, is_b_div := b_atom.(Atom_Div)
+		return is_b_div && atom_equals(a.top^, b.top^) && atom_equals(a.bot^, b.bot^)
+	}
+	return false
+}
+
+// Compares vars by value if they do not contradict
+constraint_contadicts :: proc (a, b: Constraint) -> bool
+{
+	a_var, is_a_lhs_var := a.lhs.(Atom_Var)
+	b_var, is_b_lhs_var := b.lhs.(Atom_Var)
+	a_val, is_a_lhs_num := a.lhs.(Atom_Num)
+	b_val, is_b_lhs_num := b.lhs.(Atom_Num)
+
+	return !(
+		a.var == b.var &&
+		is_a_lhs_var &&
+		is_b_lhs_var &&
+		a_var.name == b_var.name &&
+		is_a_lhs_num &&
+		is_b_lhs_num &&
+		a_val.f == b_val.f \
+	)
+}

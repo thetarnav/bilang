@@ -1,8 +1,6 @@
 package bilang
 
-import "core:fmt"
 import "core:log"
-import "core:mem"
 import test "core:testing"
 
 
