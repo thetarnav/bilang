@@ -19,6 +19,10 @@ case "$1" in
 			-out:site/_main.wasm \
 			-no-entry-point \
 			-error-pos-style:unix \
+			-o:aggressive \
+			-disable-assert \
+			-no-bounds-check \
+			-obfuscate-source-code-locations \
 			"$@"
 		;;
 	*)
