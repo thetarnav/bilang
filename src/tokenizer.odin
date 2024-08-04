@@ -20,6 +20,7 @@ Token_Kind :: enum u8 {
 	Sub,           // -
 	Mul,           // *
 	Div,           // /
+	Pow,           // ^
 	// Scalars
 	Num,           // 123, 123.456, 0.123, 0
 	// Identifiers
@@ -124,6 +125,7 @@ next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, in_file: bool
 	case '-': return make_token(t, .Sub), true
 	case '*': return make_token(t, .Mul), true
 	case '/': return make_token(t, .Div), true
+	case '^': return make_token(t, .Pow), true
 	// Number
 	// 123
 	// 123.456

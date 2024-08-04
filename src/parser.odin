@@ -51,6 +51,7 @@ Expr_Binary_Op :: enum {
 	Sub,
 	Mul,
 	Div,
+	Pow,
 }
 
 token_to_unary_op :: #force_inline proc (kind: Token_Kind) -> (op: Expr_Unary_Op, ok: bool)
@@ -62,13 +63,16 @@ token_to_unary_op :: #force_inline proc (kind: Token_Kind) -> (op: Expr_Unary_Op
 	return
 }
 
-token_to_binary_op :: #force_inline proc (kind: Token_Kind) -> (op: Expr_Binary_Op, ok: bool)
+token_to_binary_op := #force_inline proc (kind: Token_Kind) -> (op: Expr_Binary_Op, ok: bool)
 {
+	ok = true
 	#partial switch kind {
-	case .Add: return .Add, true
-	case .Sub: return .Sub, true
-	case .Mul: return .Mul, true
-	case .Div: return .Div, true
+	case .Add: op = .Add
+	case .Sub: op = .Sub
+	case .Mul: op = .Mul
+	case .Div: op = .Div
+	case .Pow: op = .Pow
+	case: ok = false
 	}
 	return
 }
@@ -78,6 +82,7 @@ precedence_table := [Expr_Binary_Op]int {
 	.Sub = 1,
 	.Mul = 2,
 	.Div = 2,
+	.Pow = 3,
 }
 
 Parse_Error :: union {

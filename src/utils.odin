@@ -14,7 +14,7 @@ log_debugf :: #force_inline proc (fmt_str: string, args: ..any, location := #cal
 	log.debugf(fmt_str, ..args, location=location)
 }
 @(disabled=!ODIN_DEBUG)
-log_debug_update :: proc (constrs: []Constraint, title := "updated", alloc := context.temp_allocator, location := #caller_location)
+log_debug_update :: proc (constrs: []Constraint, title := "updated", location := #caller_location)
 {
 	output, err := contraints_to_string(constrs)
 

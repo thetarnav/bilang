@@ -108,6 +108,11 @@ import test "core:testing"
 			"y: y = -0.5x\n"
 		},
 		{
+			"x * x = 4\n",
+
+			"x: x = 2\n",
+		},
+		{
 			"x * x = -1\n",
 
 			"x: x * x = -1\n",

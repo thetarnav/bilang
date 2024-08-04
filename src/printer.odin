@@ -130,6 +130,7 @@ write_binary :: proc (w: io.Writer, binary: ^Expr_Binary, highlight := false)
 	case .Sub: write_operator(w, "-", highlight)
 	case .Mul: write_operator(w, "*", highlight)
 	case .Div: write_operator(w, "/", highlight)
+	case .Pow: write_operator(w, "^", highlight)
 	}
 
 	io.write_string(w, " ")
@@ -249,6 +250,8 @@ write_atom :: proc (w: io.Writer, atom: Atom, params := true, highlight := false
 		write_atom_operation(w, " * ", a.factors[:], params=params, highlight=highlight)
 	case Atom_Div:
 		write_atom_operation(w, " / ", {a.top^, a.bot^}, params=params, highlight=highlight)
+	case Atom_Pow:
+		write_atom_operation(w, " ^ ", {a.base^, a.exponent^}, params=params, highlight=highlight)
 	}
 }
 

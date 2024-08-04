@@ -37,6 +37,10 @@ expected_list := []Expect_Tokens_Case {
 		"+",
 		{{.Add, "+"}},
 	},
+	{	"Pow",
+		"x^2",
+		{{.Ident, "x"}, {.Pow, "^"}, {.Num, "2"}},
+	},
 	/*
 	Names
 	*/

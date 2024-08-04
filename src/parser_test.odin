@@ -9,10 +9,7 @@ import test "core:testing"
 @test test_parser :: proc (t: ^test.T)
 {
 
-	cases := []struct {
-		input: string,
-		solve: string,
-	}{
+	cases := []struct{input, solve: string}{
 		{
 			"a + b * c + d * e = 0",
 
@@ -47,6 +44,11 @@ import test "core:testing"
 			"a = 1 + 2 / 4 * 6 / 8\n",
 
 			"a = (+ 1 (/ (* (/ 2 4) 6) 8))\n",
+		},
+		{
+			"a = 0 * 1 + 2^3 * 4 + 5\n",
+
+			"a = (+ (+ (* 0 1) (* (^ 2 3) 4)) 5)\n",
 		},
 	}
 

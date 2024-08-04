@@ -11,16 +11,16 @@ import * as odin_env from "./odin_env.js"
  */
 
 
-const textarea_input  = /** @type {HTMLTextAreaElement} */ (document.getElementById("input"))
-const textarea_output = /** @type {HTMLTextAreaElement} */ (document.getElementById("output"))
+let textarea_input  = /** @type {HTMLTextAreaElement} */ (document.getElementById("input"))
+let textarea_output = /** @type {HTMLTextAreaElement} */ (document.getElementById("output"))
 
 /** @type {odin_env.Wasm_State} */
-const wasm_state  = {
+let wasm_state  = {
 	memory : /** @type {*} */ (null),
 	exports: /** @type {*} */ (null),
 }
 
-const src_instance = await odin_env.fetchInstanciateWasm("_main.wasm", {
+let src_instance = await odin_env.fetchInstanciateWasm("_main.wasm", {
 	env: {
 		/**
 		 * @param {number} ptr 
@@ -30,11 +30,11 @@ const src_instance = await odin_env.fetchInstanciateWasm("_main.wasm", {
 			textarea_output.value = odin_env.load_string_raw(wasm_state.memory.buffer, ptr, len)
 		},
 	},
-	odin_env: odin_env  .makeOdinEnv    (wasm_state),
+	odin_env: odin_env.makeOdinEnv(wasm_state),
 })
 
 odin_env.initWasmState(wasm_state, src_instance)
-const exports = /** @type {Wasm_Exports} */ (wasm_state.exports)
+let exports = /** @type {Wasm_Exports} */ (wasm_state.exports)
 
 console.log("WASM exports:", exports)
 console.log("WASM memory:", exports.memory)
