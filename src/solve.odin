@@ -581,6 +581,9 @@ walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		if !has_dependency(lhs.exponent^, constr.var) {
 			atom_flip(lhs.exponent)
 			constr.lhs, constr.rhs, lhs.base = lhs.base, constr.lhs, constr.rhs
+
+			log_debug_update(constrs, "moved exponent to rhs")
+			updated ^= true
 		}
 	}
 
