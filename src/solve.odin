@@ -56,7 +56,7 @@ new_atom :: proc (atom: Atom) -> ^Atom
 {
 	a, err := new(Atom)
 	if err != nil do log.error("new_atom failed", err)
-	a ^= atom
+	a^ = atom
 	return a
 }
 @require_results
@@ -208,7 +208,7 @@ atom_sub_by_atom :: proc (dst: ^Atom, sub: Atom)
 	if add, is_add := &dst.(Atom_Add); is_add {
 		append(&add.addends, sub)
 	} else {
-		dst ^= atom_add_make(dst^, sub)
+		dst^ = atom_add_make(dst^, sub)
 	}
 }
 
@@ -218,10 +218,10 @@ atom_div_by_atom :: proc (dst: ^Atom, div: Atom)
 		if bot_mul, bot_is_mul := &dst_div.bot.(Atom_Mul); bot_is_mul {
 			append(&bot_mul.factors, dst_div.bot^)
 		} else {
-			dst_div.bot ^= atom_mul_make(dst_div.bot^, div)
+			dst_div.bot^ = atom_mul_make(dst_div.bot^, div)
 		}
 	} else {
-		dst ^= atom_div_make(dst^, div)
+		dst^ = atom_div_make(dst^, div)
 	}
 }
 
@@ -230,7 +230,7 @@ atom_mul_by_atom :: proc (dst: ^Atom, mul: Atom)
 	if dst_mul, is_mul := &dst.(Atom_Mul); is_mul {
 		append(&dst_mul.factors, mul)
 	} else {
-		dst ^= atom_mul_make(dst^, mul)
+		dst^ = atom_mul_make(dst^, mul)
 	}
 }
 
@@ -240,7 +240,7 @@ atom_mul :: proc (atom: ^Atom, f: Fraction)
 
 	switch f {
 	case FRACTION_ZERO:
-		atom ^= Atom_Num{FRACTION_ZERO}
+		atom^ = Atom_Num{FRACTION_ZERO}
 	case FRACTION_IDENTITY:
 		return
 	case:
@@ -326,7 +326,7 @@ atom_divide_by_var :: proc (a: ^Atom, var: string)
 	case Atom_Num:
 		panic("unexpected num")
 	case Atom_Var:
-		a ^= Atom_Num{v.f}
+		a^ = Atom_Num{v.f}
 	case Atom_Add:
 		for &addend in v.addends {
 			atom_divide_by_var(&addend, var)
@@ -499,7 +499,7 @@ walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		constr.lhs, constr.rhs = constr.rhs, constr.lhs
 
 		log_debug_update(constrs, "swapping sides")
-		updated ^= true
+		updated^ = true
 	}
 
 
@@ -514,7 +514,7 @@ walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		lhs.f = FRACTION_IDENTITY
 	
 		log_debug_update(constrs, "dividing rhs by lhs var")
-		updated ^= true
+		updated^ = true
 		
 	case Atom_Add:
 		// move addends to rhs if they don't depend on var
@@ -525,7 +525,7 @@ walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 			unordered_remove(&lhs.addends, i)
 
 			log_debug_update(constrs, "subtracting addend lhs")
-			updated ^= true
+			updated^ = true
 		}
 
 		/*
@@ -549,10 +549,10 @@ walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 			atom_div_by_atom(constr.rhs, lhs)
 
 			// lhs is now var
-			constr.lhs ^= Atom_Var{constr.var, FRACTION_IDENTITY}
+			constr.lhs^ = Atom_Var{constr.var, FRACTION_IDENTITY}
 
 			log_debug_update(constrs, "extracting var from addends")
-			updated ^= true
+			updated^ = true
 		}
 
 
@@ -564,14 +564,14 @@ walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 			unordered_remove(&lhs.factors, i)
 
 			log_debug_update(constrs, "dividing by factor lhs")
-			updated ^= true
+			updated^ = true
 		}
 
 	case Atom_Div:
 		atom_mul_by_atom(constr.rhs, lhs.bot^)
 		constr.lhs = lhs.top
 		log_debug_update(constrs, "moved lhs div to rhs")
-		updated ^= true
+		updated^ = true
 
 	case Atom_Pow:
 		/*
@@ -583,7 +583,7 @@ walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 			constr.lhs, constr.rhs, lhs.base = lhs.base, constr.lhs, constr.rhs
 
 			log_debug_update(constrs, "moved exponent to rhs")
-			updated ^= true
+			updated^ = true
 		}
 	}
 
@@ -607,7 +607,7 @@ walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 			unordered_remove(&rhs.addends, i)
 
 			log_debug_update(constrs, "subtracting addend rhs")
-			updated ^= true
+			updated^ = true
 		}
 
 	case Atom_Mul:
@@ -650,10 +650,10 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 
 			atom_div(&copy, var.f)
 			atom_mul(&copy, a.f)
-			atom ^= copy
+			atom^ = copy
 
 			log_debug_update(constrs, "substituting var")
-			updated ^= true
+			updated^ = true
 		}
 		
 	case Atom_Add:
@@ -667,7 +667,7 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 				if v.num == 0 {
 					unordered_remove(&a.addends, i)
 					log_debug_update(constrs, "removing zero")
-					updated ^= true
+					updated^ = true
 					break
 				}
 
@@ -687,7 +687,7 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 						atom_mul(v2.top, {v.f.den, 1})
 						atom_mul(&rhs,   {v.f.num, 1})
 						atom_mul(v2.bot, {v.f.den, 1})
-						v2.top ^= atom_add_make(v2.top^, rhs)
+						v2.top^ = atom_add_make(v2.top^, rhs)
 					case Atom_Var, Atom_Mul, Atom_Pow:
 						continue
 					}
@@ -695,7 +695,7 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 					unordered_remove(&a.addends, i)
 
 					log_debug_update(constrs, "folding adding num")
-					updated ^= true
+					updated^ = true
 					break
 				}
 
@@ -711,7 +711,7 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 					unordered_remove(&a.addends, i)
 
 					log_debug_update(constrs, "folding adding same vars")
-					updated ^= true
+					updated^ = true
 				}
 
 			case Atom_Add:
@@ -725,7 +725,7 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 					unordered_remove(&a.addends, i)
 
 					log_debug_update(constrs, "folding adding additions")
-					updated ^= true
+					updated^ = true
 				}
 
 			case Atom_Mul, Atom_Div, Atom_Pow:
@@ -735,9 +735,9 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 
 		// len = 1
 		if len(a.addends) == 1 {
-			atom ^= a.addends[0]
+			atom^ = a.addends[0]
 			log_debug_update(constrs, "single addend")
-			updated ^= true	
+			updated^ = true	
 		}
 
 	case Atom_Mul:
@@ -750,9 +750,9 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 				
 				/* fold multiplying zeros */
 				if v.num == 0 {
-					atom ^= Atom_Num{FRACTION_ZERO}
+					atom^ = Atom_Num{FRACTION_ZERO}
 					log_debug_update(constrs, "multiply by zero")
-					updated ^= true
+					updated^ = true
 					return // atom is now a num
 				}
 
@@ -761,7 +761,7 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 					unordered_remove(&a.factors, i)
 	
 					log_debug_update(constrs, "removing one")
-					updated ^= true
+					updated^ = true
 					break
 				}
 
@@ -784,7 +784,7 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 
 					unordered_remove(&a.factors, i)
 					log_debug_update(constrs, "fold multiplying num")
-					updated ^= true
+					updated^ = true
 					break
 				}
 			
@@ -811,7 +811,7 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 
 					unordered_remove(&a.factors, i)
 					log_debug_update(constrs, "fold multiplying same vars")
-					updated ^= true
+					updated^ = true
 					break
 				}
 			
@@ -855,19 +855,19 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 					atom_copy(rhs.addends[1]),
 				)
 	
-				atom ^= Atom_Add{addends}
+				atom^ = Atom_Add{addends}
 	
 				log_debug_update(constrs, "folding mult of adds")
-				updated ^= true
+				updated^ = true
 				return // atom is now an add
 			}
 		}
 
 		// len = 1
 		if len(a.factors) == 1 {
-			atom ^= a.factors[0]
+			atom^ = a.factors[0]
 			log_debug_update(constrs, "single factor")
-			updated ^= true
+			updated^ = true
 		}
 	
 	case Atom_Div:
@@ -888,9 +888,9 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 				return // nothing we can do
 			}
 
-			atom ^= a.top^
+			atom^ = a.top^
 			log_debug_update(constrs, "folding dividing by num")
-			updated ^= true
+			updated^ = true
 			return // atom is top atom
 			
 		case Atom_Var:
@@ -898,9 +898,9 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 			
 			if is_top_var && top_var.name == bot.name {
 				atom_div(a.top, bot.f)
-				atom ^= a.top^
+				atom^ = a.top^
 				log_debug_update(constrs, "folding dividing by var")
-				updated ^= true
+				updated^ = true
 				return // atom is now a var
 			}
 		case Atom_Mul, Atom_Div, Atom_Add, Atom_Pow:
@@ -909,9 +909,9 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 
 		// 0/x -> 0
 		if top_num, is_top_num := a.top.(Atom_Num); is_top_num && top_num.f.num == 0 {
-			atom ^= Atom_Num{FRACTION_ZERO}
+			atom^ = Atom_Num{FRACTION_ZERO}
 			log_debug_update(constrs, "dividing zero")
-			updated ^= true
+			updated^ = true
 		}
 	case Atom_Pow:
 		walk_atom(a.base    , constr_i, constrs, updated)
@@ -925,10 +925,10 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 		if is_base_num && is_exponent_num {
 			num := base_num
 			num.num = math.pow(num.num, exponent_num.num/exponent_num.den)
-			atom ^= num
+			atom^ = num
 
 			log_debug_update(constrs, "fold num pow")
-			updated ^= true
+			updated^ = true
 		}
 	}
 
