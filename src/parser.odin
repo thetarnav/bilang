@@ -65,14 +65,12 @@ token_to_unary_op :: #force_inline proc (kind: Token_Kind) -> (op: Expr_Unary_Op
 
 token_to_binary_op := #force_inline proc (kind: Token_Kind) -> (op: Expr_Binary_Op, ok: bool)
 {
-	ok = true
 	#partial switch kind {
-	case .Add: op = .Add
-	case .Sub: op = .Sub
-	case .Mul: op = .Mul
-	case .Div: op = .Div
-	case .Pow: op = .Pow
-	case: ok = false
+	case .Add: return .Add, true
+	case .Sub: return .Sub, true
+	case .Mul: return .Mul, true
+	case .Div: return .Div, true
+	case .Pow: return .Pow, true
 	}
 	return
 }

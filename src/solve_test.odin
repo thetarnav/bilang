@@ -115,7 +115,7 @@ import test "core:testing"
 		{
 			"x * x = -1\n",
 
-			"x: x * x = -1\n",
+			"x: x = NaN\n",
 			// TODO: fail because x is not real
 		},
 		// {

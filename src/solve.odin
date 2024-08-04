@@ -1,6 +1,7 @@
 package bilang
 
 import "core:log"
+import "core:math"
 
 
 Atom :: union #no_nil {
@@ -151,473 +152,6 @@ atom_from_expr :: proc (
 	return Atom_Num{FRACTION_ZERO}
 }
 
-@(require_results)
-solve :: proc (decls: []Decl, allocator := context.allocator) -> []Constraint
-{
-	context.allocator = allocator
-
-	constrs := make([dynamic]Constraint, 0, 16)
-	defer shrink(&constrs)
-
-	for decl in decls {
-		decl_start := len(constrs)
-
-		lhs := atom_from_expr(decl.lhs, &constrs, decl_start)
-		rhs := atom_from_expr(decl.rhs, &constrs, decl_start)
-		
-		for &constr in constrs[decl_start:] {
-			constr.lhs  = new_atom(atom_copy(lhs))
-			constr.rhs  = new_atom(atom_copy(rhs))
-		}
-
-		// TODO: free lhs and rhs
-	}
-
-	for {
-		updated: bool
-		for _, i in constrs {
-			walk_constraint(i, constrs[:], &updated)
-		}
-		if !updated do break
-	}
-
-	return constrs[:]
-}
-
-walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
-{
-	#no_bounds_check constr := &constrs[constr_i]
-	
-	walk_atom(constr.lhs, constr_i, constrs, updated)
-	walk_atom(constr.rhs, constr_i, constrs, updated)
-
-
-	/*
-	Keep the var on the left side
-	*/
-	if !has_dependency(constr.lhs^, constr.var) && has_dependency(constr.rhs^, constr.var)
-	{
-		constr.lhs, constr.rhs = constr.rhs, constr.lhs
-
-		log_debug_update(constrs, "swapping sides")
-		updated ^= true
-	}
-
-
-	switch &lhs in constr.lhs {
-	case Atom_Num:
-		// ignore
-
-	case Atom_Var:
-		if lhs.f == FRACTION_IDENTITY do break
-		
-		atom_div(constr.rhs, lhs.f)
-		lhs.f = FRACTION_IDENTITY
-	
-		log_debug_update(constrs, "dividing rhs by lhs var")
-		updated ^= true
-		
-	case Atom_Add:
-		// move addends to rhs if they don't depend on var
-		#reverse for &a, i in lhs.addends {
-			if has_dependency(a, constr.var) do continue
-
-			atom_sub_by_atom(constr.rhs, a)
-			unordered_remove(&lhs.addends, i)
-
-			log_debug_update(constrs, "subtracting addend lhs")
-			updated ^= true
-		}
-
-		/*
-		try extracting var from addends
-		2a + 3ab = 1  ->  a(2 + 3b) = 1  ->  a = 1 / (2 + 3b)
-		*/
-		extract: {
-			// all addends need to be dividable by var
-			for a in lhs.addends {
-				if !is_dividable_by_var(a, constr.var) {
-					break extract
-				}
-			}
-
-			// remove var from addends
-			for &a in lhs.addends {
-				atom_divide_by_var(&a, constr.var)
-			}
-
-			// move addends to rhs
-			atom_div_by_atom(constr.rhs, lhs)
-
-			// lhs is now var
-			constr.lhs ^= Atom_Var{constr.var, FRACTION_IDENTITY}
-
-			log_debug_update(constrs, "extracting var from addends")
-			updated ^= true
-		}
-
-
-	case Atom_Mul:
-		#reverse for &a, i in lhs.factors {
-			if has_dependency(a, constr.var) do continue
-
-			atom_div_by_atom(constr.rhs, a)
-			unordered_remove(&lhs.factors, i)
-
-			log_debug_update(constrs, "dividing by factor lhs")
-			updated ^= true
-		}
-
-	case Atom_Div:
-		atom_mul_by_atom(constr.rhs, lhs.bot^)
-		constr.lhs = lhs.top
-		log_debug_update(constrs, "moved lhs div to rhs")
-		updated ^= true
-
-	case Atom_Pow:
-		// ignore
-	}
-
-	if updated^ {
-		walk_atom(constr.lhs, constr_i, constrs, updated)
-		walk_atom(constr.rhs, constr_i, constrs, updated)
-	}
-
-	switch &rhs in constr.rhs {
-	case Atom_Num:
-		// ignore
-
-	case Atom_Var:
-		// ignore
-
-	case Atom_Add:
-		#reverse for a, i in rhs.addends {
-			if !has_dependency(a, constr.var) do continue
-
-			atom_sub_by_atom(constr.lhs, a)
-			unordered_remove(&rhs.addends, i)
-
-			log_debug_update(constrs, "subtracting addend rhs")
-			updated ^= true
-		}
-
-	case Atom_Mul:
-		// ignore
-
-	case Atom_Div:
-		// ignore
-
-	case Atom_Pow:
-		// ignore
-	}
-}
-
-walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^bool)
-{
-	switch &a in atom {
-	case Atom_Num:
-		// a.num /= a.den
-
-	case Atom_Var:
-		/* leave substitution as last step */
-		if updated^ do break
-
-		constr := &constrs[constr_i]
-
-		if a.name == constr.var do break
-
-		for c, i in constrs {
-			var, is_var := c.lhs.(Atom_Var)
-
-			if !is_var ||
-			   i == constr_i ||
-			   a.name != var.name ||
-			   c.rhs == constr.rhs ||
-			   has_dependencies(c.rhs^) {
-				continue
-			}
-
-			copy := atom_copy(c.rhs^)
-
-			atom_div(&copy, var.f)
-			atom_mul(&copy, a.f)
-			atom ^= copy
-
-			log_debug_update(constrs, "substituting var")
-			updated ^= true
-		}
-		
-	case Atom_Add:
-		#reverse for &addend, i in a.addends {
-
-			walk_atom(&addend, constr_i, constrs, updated)
-
-			switch &v in addend {
-			case Atom_Num:
-				/* fold adding zeros */
-				if v.num == 0 {
-					unordered_remove(&a.addends, i)
-					log_debug_update(constrs, "removing zero")
-					updated ^= true
-					break
-				}
-
-				for &addend2, j in a.addends {
-					if j == i do continue
-
-					switch &v2 in addend2 {
-					case Atom_Num:
-						v2.f = fraction_sum(v2.f, v.f)
-					case Atom_Add:
-						append(&v2.addends, addend)
-					case Atom_Div:
-						/*
-					    (a / b) + 3/2 -> (2a + 3b) / 2b
-						*/
-						rhs := atom_copy(v2.bot^)
-						atom_mul(v2.top, {v.f.den, 1})
-						atom_mul(&rhs,   {v.f.num, 1})
-						atom_mul(v2.bot, {v.f.den, 1})
-						v2.top ^= atom_add_make(v2.top^, rhs)
-					case Atom_Var, Atom_Mul, Atom_Pow:
-						continue
-					}
-
-					unordered_remove(&a.addends, i)
-
-					log_debug_update(constrs, "folding adding num")
-					updated ^= true
-					break
-				}
-
-			case Atom_Var:
-				/* fold adding same vars */
-				for &addend2, j in a.addends {
-					if j == i do continue
-
-					var2 := (&addend2.(Atom_Var)) or_continue
-					(var2.name == v.name) or_continue
-					
-					var2.f = fraction_sum(var2.f, v.f)
-					unordered_remove(&a.addends, i)
-
-					log_debug_update(constrs, "folding adding same vars")
-					updated ^= true
-				}
-
-			case Atom_Add:
-				/* fold adding additions */
-				for &addend2, j in a.addends {
-					if j == i do continue
-
-					add2 := (&addend2.(Atom_Add)) or_continue
-
-					append(&add2.addends, ..v.addends[:])
-					unordered_remove(&a.addends, i)
-
-					log_debug_update(constrs, "folding adding additions")
-					updated ^= true
-				}
-
-			case Atom_Mul, Atom_Div, Atom_Pow:
-				// TODO
-			}
-		}
-
-		// len = 1
-		if len(a.addends) == 1 {
-			atom ^= a.addends[0]
-			log_debug_update(constrs, "single addend")
-			updated ^= true	
-		}
-
-	case Atom_Mul:
-		#reverse for &factor, i in a.factors {
-
-			walk_atom(&factor, constr_i, constrs, updated)
-
-			switch v in factor {
-			case Atom_Num:
-				
-				/* fold multiplying zeros */
-				if v.num == 0 {
-					atom ^= Atom_Num{FRACTION_ZERO}
-					log_debug_update(constrs, "multiply by zero")
-					updated ^= true
-					return // atom is now a num
-				}
-
-				/* fold multiplying ones */
-				if v.f == FRACTION_IDENTITY && len(a.factors) > 1 {
-					unordered_remove(&a.factors, i)
-	
-					log_debug_update(constrs, "removing one")
-					updated ^= true
-					break
-				}
-
-				/* fold multiplying num */
-				for &factor2, j in a.factors {
-					if j == i do continue
-
-					switch &v2 in factor2 {
-					case Atom_Num:
-						v2.f = fraction_product(v2.f, v.f)
-					case Atom_Var:
-						v2.f = fraction_product(v2.f, v.f)
-					case Atom_Add:
-						for &addend in v2.addends {
-							atom_mul(&addend, v.f)
-						}
-					case Atom_Mul, Atom_Div, Atom_Pow:
-						continue
-					}
-
-					unordered_remove(&a.factors, i)
-					log_debug_update(constrs, "fold multiplying num")
-					updated ^= true
-					break
-				}
-			
-			case Atom_Var:
-				/* fold multiplying the same vars */
-				for &factor2, j in a.factors {
-					v2, is_v2_var := &factor2.(Atom_Var)
-					if j == i || !is_v2_var || v.name != v2.name do continue
-
-					base     := atom_var_make(v.name)
-					exponent := atom_num_make(2)
-					pow      := atom_pow_make(base, exponent)
-
-					/*
-					x * x -> x^2
-					*/
-					if v.f == v2.f && v.f == FRACTION_IDENTITY {
-						a.factors[j] = pow
-					}\
-					/*
-					2x * 3x -> 6 * x^2
-					*/
-					else {
-						num := Atom_Num{fraction_product(v.f, v2.f)}
-						mul := atom_mul_make(num, pow)
-						a.factors[j] = mul
-					}
-
-					unordered_remove(&a.factors, i)
-					log_debug_update(constrs, "fold multiplying same vars")
-					updated ^= true
-					break
-				}
-			
-			case Atom_Add, Atom_Mul, Atom_Div, Atom_Pow:
-				// TODO
-			}
-		}
-
-		/*
-		expand multiplying additions
-
-		(a + b) * (c + d) -> a*c + a*d + b*c + b*d
-
-		TODO: more than 2 factors
-		*/
-		if len(a.factors) == 2 {
-			lhs, is_lhs_add := &a.factors[0].(Atom_Add)
-			rhs, is_rhs_add := &a.factors[1].(Atom_Add)
-	
-			if is_lhs_add && is_rhs_add && len(lhs.addends) == 2 && len(rhs.addends) == 2 {
-
-				addends := make([dynamic]Atom, 4, 12)
-
-				addends[0] = atom_mul_make(
-					atom_copy(lhs.addends[0]),
-					atom_copy(rhs.addends[0]),
-				)
-
-				addends[1] = atom_mul_make(
-					atom_copy(lhs.addends[0]),
-					atom_copy(rhs.addends[1]),
-				)
-
-				addends[2] = atom_mul_make(
-					atom_copy(lhs.addends[1]),
-					atom_copy(rhs.addends[0]),
-				)
-
-				addends[3] = atom_mul_make(
-					atom_copy(lhs.addends[1]),
-					atom_copy(rhs.addends[1]),
-				)
-	
-				atom ^= Atom_Add{addends}
-	
-				log_debug_update(constrs, "folding mult of adds")
-				updated ^= true
-				return // atom is now an add
-			}
-		}
-
-		// len = 1
-		if len(a.factors) == 1 {
-			atom ^= a.factors[0]
-			log_debug_update(constrs, "single factor")
-			updated ^= true
-		}
-	
-	case Atom_Div:
-
-		walk_atom(a.top, constr_i, constrs, updated)
-		walk_atom(a.bot, constr_i, constrs, updated)
-
-		switch bot in a.bot {
-		case Atom_Num:
-
-			switch top in a.top {
-			case Atom_Num: atom_div(a.top, bot.f)
-			case Atom_Var: atom_div(a.top, bot.f)
-			case Atom_Div: atom_mul(top.bot, bot.f)
-			case Atom_Mul: atom_div(a.top, bot.f)
-			case Atom_Add: atom_div(a.top, bot.f)
-			case Atom_Pow:
-				return // nothing we can do
-			}
-
-			atom ^= a.top^
-			log_debug_update(constrs, "folding dividing by num")
-			updated ^= true
-			return // atom is top atom
-			
-		case Atom_Var:
-			top_var, is_top_var := a.top.(Atom_Var)
-			
-			if is_top_var && top_var.name == bot.name {
-				atom_div(a.top, bot.f)
-				atom ^= a.top^
-				log_debug_update(constrs, "folding dividing by var")
-				updated ^= true
-				return // atom is now a var
-			}
-		case Atom_Mul, Atom_Div, Atom_Add, Atom_Pow:
-			// TODO
-		}
-
-		// 0/x -> 0
-		if top_num, is_top_num := a.top.(Atom_Num); is_top_num && top_num.f.num == 0 {
-			atom ^= Atom_Num{FRACTION_ZERO}
-			log_debug_update(constrs, "dividing zero")
-			updated ^= true
-		}
-	case Atom_Pow:
-		walk_atom(a.base    , constr_i, constrs, updated)
-		walk_atom(a.exponent, constr_i, constrs, updated)
-
-		// TODO
-	}
-
-	return
-}
-
 atom_copy :: proc (src: Atom) -> Atom
 {
 	switch s in src {
@@ -743,7 +277,19 @@ atom_neg :: proc (atom: ^Atom)
 	atom_mul(atom, {-1, 1})
 }
 
-
+atom_flip :: proc (atom: ^Atom)
+{
+	switch &a in atom {
+	case Atom_Num:
+		a.num, a.den = a.den, a.num
+	case Atom_Var:
+		a.f.num, a.f.den = a.f.den, a.f.num
+	case Atom_Div:
+		a.top, a.bot = a.bot, a.top
+	case Atom_Add, Atom_Mul, Atom_Pow:
+		atom^ = atom_div_make(atom^, Atom_Num{{1, 1}})
+	}
+}
 
 is_dividable_by_var :: proc (a: Atom, var: string) -> bool
 {
@@ -903,3 +449,485 @@ atom_equals :: proc (a_atom, b_atom: Atom) -> bool
 // 		a_val.f == b_val.f \
 // 	)
 // }
+
+@(require_results)
+solve :: proc (decls: []Decl, allocator := context.allocator) -> []Constraint
+{
+	context.allocator = allocator
+
+	constrs := make([dynamic]Constraint, 0, 16)
+	defer shrink(&constrs)
+
+	for decl in decls {
+		decl_start := len(constrs)
+
+		lhs := atom_from_expr(decl.lhs, &constrs, decl_start)
+		rhs := atom_from_expr(decl.rhs, &constrs, decl_start)
+		
+		for &constr in constrs[decl_start:] {
+			constr.lhs = new_atom(atom_copy(lhs))
+			constr.rhs = new_atom(atom_copy(rhs))
+		}
+
+		// TODO: free lhs and rhs
+	}
+
+	for {
+		updated: bool
+		for _, i in constrs {
+			walk_constraint(i, constrs[:], &updated)
+		}
+		if !updated do break
+	}
+
+	return constrs[:]
+}
+
+walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
+{
+	#no_bounds_check constr := &constrs[constr_i]
+	
+	walk_atom(constr.lhs, constr_i, constrs, updated)
+	walk_atom(constr.rhs, constr_i, constrs, updated)
+
+
+	/*
+	Keep the var on the left side
+	*/
+	if !has_dependency(constr.lhs^, constr.var) && has_dependency(constr.rhs^, constr.var)
+	{
+		constr.lhs, constr.rhs = constr.rhs, constr.lhs
+
+		log_debug_update(constrs, "swapping sides")
+		updated ^= true
+	}
+
+
+	switch &lhs in constr.lhs {
+	case Atom_Num:
+		// ignore
+
+	case Atom_Var:
+		if lhs.f == FRACTION_IDENTITY do break
+		
+		atom_div(constr.rhs, lhs.f)
+		lhs.f = FRACTION_IDENTITY
+	
+		log_debug_update(constrs, "dividing rhs by lhs var")
+		updated ^= true
+		
+	case Atom_Add:
+		// move addends to rhs if they don't depend on var
+		#reverse for &a, i in lhs.addends {
+			if has_dependency(a, constr.var) do continue
+
+			atom_sub_by_atom(constr.rhs, a)
+			unordered_remove(&lhs.addends, i)
+
+			log_debug_update(constrs, "subtracting addend lhs")
+			updated ^= true
+		}
+
+		/*
+		try extracting var from addends
+		2a + 3ab = 1  ->  a(2 + 3b) = 1  ->  a = 1 / (2 + 3b)
+		*/
+		extract: {
+			// all addends need to be dividable by var
+			for a in lhs.addends {
+				if !is_dividable_by_var(a, constr.var) {
+					break extract
+				}
+			}
+
+			// remove var from addends
+			for &a in lhs.addends {
+				atom_divide_by_var(&a, constr.var)
+			}
+
+			// move addends to rhs
+			atom_div_by_atom(constr.rhs, lhs)
+
+			// lhs is now var
+			constr.lhs ^= Atom_Var{constr.var, FRACTION_IDENTITY}
+
+			log_debug_update(constrs, "extracting var from addends")
+			updated ^= true
+		}
+
+
+	case Atom_Mul:
+		#reverse for &a, i in lhs.factors {
+			if has_dependency(a, constr.var) do continue
+
+			atom_div_by_atom(constr.rhs, a)
+			unordered_remove(&lhs.factors, i)
+
+			log_debug_update(constrs, "dividing by factor lhs")
+			updated ^= true
+		}
+
+	case Atom_Div:
+		atom_mul_by_atom(constr.rhs, lhs.bot^)
+		constr.lhs = lhs.top
+		log_debug_update(constrs, "moved lhs div to rhs")
+		updated ^= true
+
+	case Atom_Pow:
+		/*
+		move exponent to the right
+		x^2 = y  ->  x = y^(1/2)
+		*/
+		if !has_dependency(lhs.exponent^, constr.var) {
+			atom_flip(lhs.exponent)
+			constr.lhs, constr.rhs, lhs.base = lhs.base, constr.lhs, constr.rhs
+		}
+	}
+
+	if updated^ {
+		walk_atom(constr.lhs, constr_i, constrs, updated)
+		walk_atom(constr.rhs, constr_i, constrs, updated)
+	}
+
+	switch &rhs in constr.rhs {
+	case Atom_Num:
+		// ignore
+
+	case Atom_Var:
+		// ignore
+
+	case Atom_Add:
+		#reverse for a, i in rhs.addends {
+			if !has_dependency(a, constr.var) do continue
+
+			atom_sub_by_atom(constr.lhs, a)
+			unordered_remove(&rhs.addends, i)
+
+			log_debug_update(constrs, "subtracting addend rhs")
+			updated ^= true
+		}
+
+	case Atom_Mul:
+		// ignore
+
+	case Atom_Div:
+		// ignore
+
+	case Atom_Pow:
+		// ignore
+	}
+}
+
+walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^bool)
+{
+	switch &a in atom {
+	case Atom_Num:
+		// a.num /= a.den
+
+	case Atom_Var:
+		/* leave substitution as last step */
+		if updated^ do break
+
+		constr := &constrs[constr_i]
+
+		if a.name == constr.var do break
+
+		for c, i in constrs {
+			var, is_var := c.lhs.(Atom_Var)
+
+			if !is_var ||
+			   i == constr_i ||
+			   a.name != var.name ||
+			   c.rhs == constr.rhs ||
+			   has_dependencies(c.rhs^) {
+				continue
+			}
+
+			copy := atom_copy(c.rhs^)
+
+			atom_div(&copy, var.f)
+			atom_mul(&copy, a.f)
+			atom ^= copy
+
+			log_debug_update(constrs, "substituting var")
+			updated ^= true
+		}
+		
+	case Atom_Add:
+		#reverse for &addend, i in a.addends {
+
+			walk_atom(&addend, constr_i, constrs, updated)
+
+			switch &v in addend {
+			case Atom_Num:
+				/* fold adding zeros */
+				if v.num == 0 {
+					unordered_remove(&a.addends, i)
+					log_debug_update(constrs, "removing zero")
+					updated ^= true
+					break
+				}
+
+				for &addend2, j in a.addends {
+					if j == i do continue
+
+					switch &v2 in addend2 {
+					case Atom_Num:
+						v2.f = fraction_sum(v2.f, v.f)
+					case Atom_Add:
+						append(&v2.addends, addend)
+					case Atom_Div:
+						/*
+					    (a / b) + 3/2  ->  (2a + 3b) / 2b
+						*/
+						rhs := atom_copy(v2.bot^)
+						atom_mul(v2.top, {v.f.den, 1})
+						atom_mul(&rhs,   {v.f.num, 1})
+						atom_mul(v2.bot, {v.f.den, 1})
+						v2.top ^= atom_add_make(v2.top^, rhs)
+					case Atom_Var, Atom_Mul, Atom_Pow:
+						continue
+					}
+
+					unordered_remove(&a.addends, i)
+
+					log_debug_update(constrs, "folding adding num")
+					updated ^= true
+					break
+				}
+
+			case Atom_Var:
+				/* fold adding same vars */
+				for &addend2, j in a.addends {
+					if j == i do continue
+
+					var2 := (&addend2.(Atom_Var)) or_continue
+					(var2.name == v.name) or_continue
+					
+					var2.f = fraction_sum(var2.f, v.f)
+					unordered_remove(&a.addends, i)
+
+					log_debug_update(constrs, "folding adding same vars")
+					updated ^= true
+				}
+
+			case Atom_Add:
+				/* fold adding additions */
+				for &addend2, j in a.addends {
+					if j == i do continue
+
+					add2 := (&addend2.(Atom_Add)) or_continue
+
+					append(&add2.addends, ..v.addends[:])
+					unordered_remove(&a.addends, i)
+
+					log_debug_update(constrs, "folding adding additions")
+					updated ^= true
+				}
+
+			case Atom_Mul, Atom_Div, Atom_Pow:
+				// TODO
+			}
+		}
+
+		// len = 1
+		if len(a.addends) == 1 {
+			atom ^= a.addends[0]
+			log_debug_update(constrs, "single addend")
+			updated ^= true	
+		}
+
+	case Atom_Mul:
+		#reverse for &factor, i in a.factors {
+
+			walk_atom(&factor, constr_i, constrs, updated)
+
+			switch v in factor {
+			case Atom_Num:
+				
+				/* fold multiplying zeros */
+				if v.num == 0 {
+					atom ^= Atom_Num{FRACTION_ZERO}
+					log_debug_update(constrs, "multiply by zero")
+					updated ^= true
+					return // atom is now a num
+				}
+
+				/* fold multiplying ones */
+				if v.f == FRACTION_IDENTITY && len(a.factors) > 1 {
+					unordered_remove(&a.factors, i)
+	
+					log_debug_update(constrs, "removing one")
+					updated ^= true
+					break
+				}
+
+				/* fold multiplying num */
+				for &factor2, j in a.factors {
+					if j == i do continue
+
+					switch &v2 in factor2 {
+					case Atom_Num:
+						v2.f = fraction_product(v2.f, v.f)
+					case Atom_Var:
+						v2.f = fraction_product(v2.f, v.f)
+					case Atom_Add:
+						for &addend in v2.addends {
+							atom_mul(&addend, v.f)
+						}
+					case Atom_Mul, Atom_Div, Atom_Pow:
+						continue
+					}
+
+					unordered_remove(&a.factors, i)
+					log_debug_update(constrs, "fold multiplying num")
+					updated ^= true
+					break
+				}
+			
+			case Atom_Var:
+				/* fold multiplying the same vars */
+				for &factor2, j in a.factors {
+					v2, is_v2_var := &factor2.(Atom_Var)
+					if j == i || !is_v2_var || v.name != v2.name do continue
+
+					base     := atom_var_make(v.name)
+					exponent := atom_num_make(2)
+					pow      := atom_pow_make(base, exponent)
+
+					// x * x  ->  x^2
+					if v.f == v2.f && v.f == FRACTION_IDENTITY {
+						a.factors[j] = pow
+					}\
+					// 2x * 3x  ->  6 * x^2
+					else {
+						num := Atom_Num{fraction_product(v.f, v2.f)}
+						mul := atom_mul_make(num, pow)
+						a.factors[j] = mul
+					}
+
+					unordered_remove(&a.factors, i)
+					log_debug_update(constrs, "fold multiplying same vars")
+					updated ^= true
+					break
+				}
+			
+			case Atom_Add, Atom_Mul, Atom_Div, Atom_Pow:
+				// TODO
+			}
+		}
+
+		/*
+		expand multiplying additions
+
+		(a + b) * (c + d) -> a*c + a*d + b*c + b*d
+
+		TODO: more than 2 factors
+		*/
+		if len(a.factors) == 2 {
+			lhs, is_lhs_add := &a.factors[0].(Atom_Add)
+			rhs, is_rhs_add := &a.factors[1].(Atom_Add)
+	
+			if is_lhs_add && is_rhs_add && len(lhs.addends) == 2 && len(rhs.addends) == 2 {
+
+				addends := make([dynamic]Atom, 4, 12)
+
+				addends[0] = atom_mul_make(
+					atom_copy(lhs.addends[0]),
+					atom_copy(rhs.addends[0]),
+				)
+
+				addends[1] = atom_mul_make(
+					atom_copy(lhs.addends[0]),
+					atom_copy(rhs.addends[1]),
+				)
+
+				addends[2] = atom_mul_make(
+					atom_copy(lhs.addends[1]),
+					atom_copy(rhs.addends[0]),
+				)
+
+				addends[3] = atom_mul_make(
+					atom_copy(lhs.addends[1]),
+					atom_copy(rhs.addends[1]),
+				)
+	
+				atom ^= Atom_Add{addends}
+	
+				log_debug_update(constrs, "folding mult of adds")
+				updated ^= true
+				return // atom is now an add
+			}
+		}
+
+		// len = 1
+		if len(a.factors) == 1 {
+			atom ^= a.factors[0]
+			log_debug_update(constrs, "single factor")
+			updated ^= true
+		}
+	
+	case Atom_Div:
+
+		walk_atom(a.top, constr_i, constrs, updated)
+		walk_atom(a.bot, constr_i, constrs, updated)
+
+		switch bot in a.bot {
+		case Atom_Num:
+
+			switch top in a.top {
+			case Atom_Num: atom_div(a.top, bot.f)
+			case Atom_Var: atom_div(a.top, bot.f)
+			case Atom_Div: atom_mul(top.bot, bot.f)
+			case Atom_Mul: atom_div(a.top, bot.f)
+			case Atom_Add: atom_div(a.top, bot.f)
+			case Atom_Pow:
+				return // nothing we can do
+			}
+
+			atom ^= a.top^
+			log_debug_update(constrs, "folding dividing by num")
+			updated ^= true
+			return // atom is top atom
+			
+		case Atom_Var:
+			top_var, is_top_var := a.top.(Atom_Var)
+			
+			if is_top_var && top_var.name == bot.name {
+				atom_div(a.top, bot.f)
+				atom ^= a.top^
+				log_debug_update(constrs, "folding dividing by var")
+				updated ^= true
+				return // atom is now a var
+			}
+		case Atom_Mul, Atom_Div, Atom_Add, Atom_Pow:
+			// TODO
+		}
+
+		// 0/x -> 0
+		if top_num, is_top_num := a.top.(Atom_Num); is_top_num && top_num.f.num == 0 {
+			atom ^= Atom_Num{FRACTION_ZERO}
+			log_debug_update(constrs, "dividing zero")
+			updated ^= true
+		}
+	case Atom_Pow:
+		walk_atom(a.base    , constr_i, constrs, updated)
+		walk_atom(a.exponent, constr_i, constrs, updated)
+
+		// fold num pow
+		// 2^3 -> 8
+		base_num    , is_base_num     := a.base.(Atom_Num)
+		exponent_num, is_exponent_num := a.exponent.(Atom_Num)
+
+		if is_base_num && is_exponent_num {
+			num := base_num
+			num.num = math.pow(num.num, exponent_num.num/exponent_num.den)
+			atom ^= num
+
+			log_debug_update(constrs, "fold num pow")
+			updated ^= true
+		}
+	}
+
+	return
+}
