@@ -118,6 +118,11 @@ import test "core:testing"
 			"x: x = NaN\n",
 			// TODO: fail because x is not real
 		},
+		{
+			"(x^2 + 12) * (x + 1) = 4",
+
+			"x: x^3 + x^2 + 12*x = -8\n",
+		},
 		// {
 		// 	"a = a + 1\n",
 

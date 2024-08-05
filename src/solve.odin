@@ -741,134 +741,7 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 		}
 
 	case Atom_Mul:
-		#reverse for &factor, i in a.factors {
-
-			walk_atom(&factor, constr_i, constrs, updated)
-
-			switch v in factor {
-			case Atom_Num:
-				
-				/* fold multiplying zeros */
-				if v.num == 0 {
-					atom^ = Atom_Num{FRACTION_ZERO}
-					log_debug_update(constrs, "multiply by zero")
-					updated^ = true
-					return // atom is now a num
-				}
-
-				/* fold multiplying ones */
-				if v.f == FRACTION_IDENTITY && len(a.factors) > 1 {
-					unordered_remove(&a.factors, i)
-	
-					log_debug_update(constrs, "removing one")
-					updated^ = true
-					break
-				}
-
-				/* fold multiplying num */
-				for &factor2, j in a.factors {
-					if j == i do continue
-
-					switch &v2 in factor2 {
-					case Atom_Num:
-						v2.f = fraction_product(v2.f, v.f)
-					case Atom_Var:
-						v2.f = fraction_product(v2.f, v.f)
-					case Atom_Add:
-						for &addend in v2.addends {
-							atom_mul(&addend, v.f)
-						}
-					case Atom_Mul, Atom_Div, Atom_Pow:
-						continue
-					}
-
-					unordered_remove(&a.factors, i)
-					log_debug_update(constrs, "fold multiplying num")
-					updated^ = true
-					break
-				}
-			
-			case Atom_Var:
-				/* fold multiplying the same vars */
-				for &factor2, j in a.factors {
-					v2, is_v2_var := &factor2.(Atom_Var)
-					if j == i || !is_v2_var || v.name != v2.name do continue
-
-					base     := atom_var_make(v.name)
-					exponent := atom_num_make(2)
-					pow      := atom_pow_make(base, exponent)
-
-					// x * x  ->  x^2
-					if v.f == v2.f && v.f == FRACTION_IDENTITY {
-						a.factors[j] = pow
-					}\
-					// 2x * 3x  ->  6 * x^2
-					else {
-						num := Atom_Num{fraction_product(v.f, v2.f)}
-						mul := atom_mul_make(num, pow)
-						a.factors[j] = mul
-					}
-
-					unordered_remove(&a.factors, i)
-					log_debug_update(constrs, "fold multiplying same vars")
-					updated^ = true
-					break
-				}
-			
-			case Atom_Add, Atom_Mul, Atom_Div, Atom_Pow:
-				// TODO
-			}
-		}
-
-		/*
-		expand multiplying additions
-
-		(a + b) * (c + d) -> a*c + a*d + b*c + b*d
-
-		TODO: more than 2 factors
-		*/
-		if len(a.factors) == 2 {
-			lhs, is_lhs_add := &a.factors[0].(Atom_Add)
-			rhs, is_rhs_add := &a.factors[1].(Atom_Add)
-	
-			if is_lhs_add && is_rhs_add && len(lhs.addends) == 2 && len(rhs.addends) == 2 {
-
-				addends := make([dynamic]Atom, 4, 12)
-
-				addends[0] = atom_mul_make(
-					atom_copy(lhs.addends[0]),
-					atom_copy(rhs.addends[0]),
-				)
-
-				addends[1] = atom_mul_make(
-					atom_copy(lhs.addends[0]),
-					atom_copy(rhs.addends[1]),
-				)
-
-				addends[2] = atom_mul_make(
-					atom_copy(lhs.addends[1]),
-					atom_copy(rhs.addends[0]),
-				)
-
-				addends[3] = atom_mul_make(
-					atom_copy(lhs.addends[1]),
-					atom_copy(rhs.addends[1]),
-				)
-	
-				atom^ = Atom_Add{addends}
-	
-				log_debug_update(constrs, "folding mult of adds")
-				updated^ = true
-				return // atom is now an add
-			}
-		}
-
-		// len = 1
-		if len(a.factors) == 1 {
-			atom^ = a.factors[0]
-			log_debug_update(constrs, "single factor")
-			updated^ = true
-		}
+		walk_atom_mul(atom, &a, constr_i, constrs, updated)
 	
 	case Atom_Div:
 
@@ -933,4 +806,152 @@ walk_atom :: proc (atom: ^Atom, constr_i: int, constrs: []Constraint, updated: ^
 	}
 
 	return
+}
+
+walk_atom_mul :: proc (atom: ^Atom, mul: ^Atom_Mul, constr_i: int, constrs: []Constraint, updated: ^bool)
+{
+	#reverse for &factor, i in mul.factors {
+
+		walk_atom(&factor, constr_i, constrs, updated)
+
+		switch v in factor {
+		case Atom_Num:
+			
+			/* fold multiplying zeros */
+			if v.num == 0 {
+				atom^ = Atom_Num{FRACTION_ZERO}
+				log_debug_update(constrs, "multiply by zero")
+				updated^ = true
+				return // atom is now a num
+			}
+
+			/* fold multiplying ones */
+			if v.f == FRACTION_IDENTITY && len(mul.factors) > 1 {
+				unordered_remove(&mul.factors, i)
+
+				log_debug_update(constrs, "removing one")
+				updated^ = true
+				break
+			}
+
+			/* fold multiplying num */
+			for &factor2, j in mul.factors {
+				if j == i do continue
+
+				switch &v2 in factor2 {
+				case Atom_Num:
+					v2.f = fraction_product(v2.f, v.f)
+				case Atom_Var:
+					v2.f = fraction_product(v2.f, v.f)
+				case Atom_Add:
+					for &addend in v2.addends {
+						atom_mul(&addend, v.f)
+					}
+				case Atom_Mul, Atom_Div, Atom_Pow:
+					continue
+				}
+
+				unordered_remove(&mul.factors, i)
+				log_debug_update(constrs, "fold multiplying num")
+				updated^ = true
+				break
+			}
+		
+		case Atom_Var:
+			/* fold multiplying the same vars */
+			for &factor2, j in mul.factors {
+				v2, is_v2_var := &factor2.(Atom_Var)
+				if j == i || !is_v2_var || v.name != v2.name do continue
+
+				base     := atom_var_make(v.name)
+				exponent := atom_num_make(2)
+				pow      := atom_pow_make(base, exponent)
+
+				// x * x  ->  x^2
+				if v.f == v2.f && v.f == FRACTION_IDENTITY {
+					mul.factors[j] = pow
+				}\
+				// 2x * 3x  ->  6 * x^2
+				else {
+					num := Atom_Num{fraction_product(v.f, v2.f)}
+					mul.factors[j] = atom_mul_make(num, pow)
+				}
+
+				unordered_remove(&mul.factors, i)
+				log_debug_update(constrs, "fold multiplying same vars")
+				updated^ = true
+				break
+			}
+
+		case Atom_Pow:
+			/*
+			increase power
+			x^2 * x  ->  x^3
+			*/
+			for &factor2, j in mul.factors {
+				if j == i || !atom_equals(v.base^, factor2) do continue
+
+				v.exponent^ = atom_add_make(v.exponent^, Atom_Num{{1, 1}})
+				mul.factors[j] = v
+
+				unordered_remove(&mul.factors, i)
+				log_debug_update(constrs, "increase power")
+				updated^ = true
+				break
+			}
+		
+		case Atom_Add, Atom_Mul, Atom_Div:
+			// TODO
+		}
+	}
+
+	/*
+	expand multiplying additions
+
+	(a + b) * (c + d) -> a*c + a*d + b*c + b*d
+
+	TODO: more than 2 factors
+	*/
+	if len(mul.factors) == 2 {
+		lhs, is_lhs_add := &mul.factors[0].(Atom_Add)
+		rhs, is_rhs_add := &mul.factors[1].(Atom_Add)
+
+		if is_lhs_add && is_rhs_add && len(lhs.addends) == 2 && len(rhs.addends) == 2 {
+
+			addends := make([dynamic]Atom, 4, 12)
+
+			addends[0] = atom_mul_make(
+				atom_copy(lhs.addends[0]),
+				atom_copy(rhs.addends[0]),
+			)
+
+			addends[1] = atom_mul_make(
+				atom_copy(lhs.addends[0]),
+				atom_copy(rhs.addends[1]),
+			)
+
+			addends[2] = atom_mul_make(
+				atom_copy(lhs.addends[1]),
+				atom_copy(rhs.addends[0]),
+			)
+
+			addends[3] = atom_mul_make(
+				atom_copy(lhs.addends[1]),
+				atom_copy(rhs.addends[1]),
+			)
+
+			atom^ = Atom_Add{addends}
+
+			log_debug_update(constrs, "folding mult of adds")
+			updated^ = true
+			return // atom is now an add
+		}
+	}
+
+	// len = 1
+	if len(mul.factors) == 1 {
+		atom^ = mul.factors[0]
+		log_debug_update(constrs, "single factor")
+		updated^ = true
+	}
 }
