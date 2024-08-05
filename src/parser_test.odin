@@ -13,17 +13,17 @@ import test "core:testing"
 		{
 			"a + b * c + d * e = 0",
 
-			"(+ (+ a (* b c)) (* d e)) = 0\n",
+			"(a + (b * c)) + (d * e) = 0\n",
 		},
 		{
 			"a * b + c * d + e = 0",
 
-			"(+ (+ (* a b) (* c d)) e) = 0\n",
+			"((a * b) + (c * d)) + e = 0\n",
 		},
 		{
 			"(n * 2 + 10) / (n + 1) = 3",
 
-			"(/ (+ (* n 2) 10) (+ n 1)) = 3\n",
+			"((n * 2) + 10) / (n + 1) = 3\n",
 		},
 		{
 			"\n"+
@@ -31,24 +31,24 @@ import test "core:testing"
 			"a + b = c * 4 + -20"+"\n"+
 			"a - b = 10 * (5 + 15) / 2"+"\n",
 
-			"a = (+ (- 69.5) 2)"+"\n"+
-			"(+ a b) = (+ (* c 4) (- 20))"+"\n"+
-			"(- a b) = (/ (* 10 (+ 5 15)) 2)"+"\n",
+			"a = (- 69.5) + 2"+"\n"+
+			"a + b = (c * 4) + (- 20)"+"\n"+
+			"a - b = (10 * (5 + 15)) / 2"+"\n",
 		},
 		{
 			"a = 1 / 2 / 4\n",
 
-			"a = (/ (/ 1 2) 4)\n",
+			"a = (1 / 2) / 4\n",
 		},
 		{
 			"a = 1 + 2 / 4 * 6 / 8\n",
 
-			"a = (+ 1 (/ (* (/ 2 4) 6) 8))\n",
+			"a = 1 + (((2 / 4) * 6) / 8)\n",
 		},
 		{
 			"a = 0 * 1 + 2^3 * 4 + 5\n",
 
-			"a = (+ (+ (* 0 1) (* (^ 2 3) 4)) 5)\n",
+			"a = ((0 * 1) + ((2 ^ 3) * 4)) + 5\n",
 		},
 	}
 
@@ -87,7 +87,7 @@ import test "core:testing"
 
 			strings.builder_reset(&b) // makes output unusable !!!
 
-			write_decls(w, decls, highlight=true)
+			write_decls(w, decls, {highlight=true})
 			output_pretty := strings.clone(strings.to_string(b))
 
 			log.errorf(

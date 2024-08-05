@@ -75,8 +75,8 @@ import test "core:testing"
 		{
 			"(4*n + 10) / (n + 1) = 2*x + 1/2\n",
 
-			"n: n = (-9.5 + 2x) / (3.5 + -2x)\n"+
-			"x: x = (7n + 19) / (4n + 4)\n",
+			"n: n = (-9.5 + 2*x) / (3.5 + -2*x)\n"+
+			"x: x = (7*n + 19) / (4*n + 4)\n",
 		},
 		{
 			"a*b = 0\n",
@@ -104,8 +104,8 @@ import test "core:testing"
 		{
 			"2*x + 4*y = 0\n",
 
-			"x: x = -2y\n"+
-			"y: y = -0.5x\n"
+			"x: x = -2*y\n"+
+			"y: y = -0.5*x\n"
 		},
 		{
 			"x * x = 4\n",
@@ -161,12 +161,12 @@ import test "core:testing"
 
 			strings.builder_reset(&b) // makes output unusable !!!
 
-			write_contraints(w, constrs, highlight=true)
+			write_contraints(w, constrs, {highlight=true})
 			output_pretty := strings.clone(strings.to_string(b))
 
 			strings.builder_reset(&b)
 
-			write_decls(w, decls, highlight=true)
+			write_decls(w, decls, {highlight=true})
 			decls_pretty := strings.clone(strings.to_string(b))
 
 			log.errorf(
