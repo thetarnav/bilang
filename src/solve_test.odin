@@ -76,7 +76,7 @@ import test "core:testing"
 			"(4*n + 10) / (n + 1) = 2*x + 1/2\n",
 
 			"n: n = (-9.5 + 2*x) / (3.5 + -2*x)\n"+
-			"x: x = (7*n + 19) / (4*n + 4)\n",
+			"x: x = (19 + 7*n) / (4*n + 4)\n",
 		},
 		{
 			"a*b = 0\n",
@@ -152,7 +152,7 @@ import test "core:testing"
 			)
 			continue
 		}
-	
+
 		constrs := solve(decls)
 	
 		b := strings.builder_make_len_cap(0, 1024)

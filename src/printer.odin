@@ -215,7 +215,7 @@ contraints_to_string :: proc (
 	constrs: []Constraint,
 	opts   : Writer_Options = {},
 	allocator := context.allocator,
-) -> (s: string, err: mem.Allocator_Error)
+) -> (s: string, err: mem.Allocator_Error) #optional_allocator_error
 {
 	b := strings.builder_make_len_cap(0, 1024, allocator) or_return
 	w := strings.to_writer(&b)
@@ -275,11 +275,11 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 			atoms = v.factors[:]
 		case Atom_Div:
 			op = " / "
-			atoms = {v.top^, v.bot^}
+			atoms = {v.lhs^, v.rhs^}
 		case Atom_Pow:
 			op = "^"
 			opts.parens = false
-			atoms = {v.base^, v.exponent^}
+			atoms = {v.lhs^, v.rhs^}
 		}
 
 		if opts.parens {
