@@ -1049,32 +1049,67 @@ walk_atom_mul :: proc (atom: ^Atom, mul: ^Atom_Mul, updated: ^bool)
 	}
 }
 
-// try_finding_approximate_solution :: proc (constr: ^Constraint) -> bool
-// {
-// 	if has_dependency_other_than_var(constr.lhs^, constr.var) ||
-// 	   has_dependency_other_than_var(constr.rhs^, constr.var) {
-// 		return false
-// 	}
+try_finding_approximate_solution :: proc (constr: ^Constraint) -> bool
+{
+	if has_dependency_other_than_var(constr.lhs^, constr.var) ||
+	   has_dependency_other_than_var(constr.rhs^, constr.var) {
+		return false
+	}
 
-// 	/*
-// 	move right to the left to have a single atom equals 0
-// 	x^2 + x = 12  ->  x^2 + x + -12 = 0
-// 	*/
-// 	atom := atom_copy(constr.lhs^) // rhs is copied by atom_sub_by_atom
-// 	atom_sub_by_atom(&atom, constr.rhs^)
+	/*
+	move right to the left to have a single atom equals 0
+	x^2 + x = 12  ->  x^2 + x + -12 = 0
+	*/
+	atom := atom_copy(constr.lhs^) // rhs is copied by atom_sub_by_atom
+	atom_sub_by_atom(&atom, constr.rhs^)
 
-// 	// fold whats possible
-// 	for {
-// 		updated: bool
-// 		walk_atom(&atom, &updated)
-// 		updated or_break
-// 	}
+	// fold whats possible
+	for {
+		updated: bool
+		walk_atom(&atom, &updated)
+		updated or_break	
+	}
 
-// 	Float :: bit_field u32 {
-// 		sign: i8  |  1,
-// 		bits: u32 | 31,
-// 	}
+	var := atom_var_make(constr.var)
+
+	Float :: bit_field u32 {
+		sign: b8  |  1,
+		bits: u32 | 31,
+	}
+
+	MAX_U32: u32 : 0b01111111011111111111111111111111
+	RANGE  : u32 : 0b11111110111111111111111111111110
+
+	MIN_INT :: -int(MAX_U32)
+	MAX_INT ::  int(MAX_U32)
+
+	lo, hi := MIN_INT, MAX_INT
+
+	// TODO: f64
+
+	for {
+		mid := (lo+hi)/2
+		
+		float: Float = mid > 0 \
+			? {sign=false, bits=u32( mid)} \
+			: {sign=true,  bits=u32(-mid)}
+		var_value := atom_num_make(f64(transmute(f32)float))
+
+		updated: bool
+		atom := atom_copy(atom)
+		try_substituting_var(&atom, var, var_value, &updated)
+		for updated {
+			updated = false
+			walk_atom(&atom, &updated)
+		}
+
+		// atom_num := atom.(Atom_Num) or_return
+
+		break
+
+		// what now?
+	}
 
 
-// 	return false
-// }
+	return false
+}
