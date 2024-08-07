@@ -7,16 +7,18 @@ polynomial_degree :: proc (p: Polynomial) -> int {
 	return len(p) - 1
 }
 
+MAX_POLYNOMIAL_LEN :: 4 // only allow 4 coefficients for now
+
 @require_results
-polynomial_from_atom :: proc (atom: Atom) -> (p: Polynomial, ok: bool)
+polynomial_from_atom :: proc (atom: Atom) -> (p: Polynomial, ok: bool) #no_bounds_check
 {
 	add := atom.(Atom_Add) or_return
 
-	coefficients: [4]f64 // only allow 4 coefficients for now
-	filled      : [4]bool
+	coefficients: [MAX_POLYNOMIAL_LEN]f64
+	filled      : [MAX_POLYNOMIAL_LEN]bool
 	size        : int
 
-	if len(add.addends) > len(coefficients) {
+	if len(add.addends) > MAX_POLYNOMIAL_LEN {
 		return
 	}
 
@@ -26,35 +28,35 @@ polynomial_from_atom :: proc (atom: Atom) -> (p: Polynomial, ok: bool)
 		#partial switch v in addend {
 		case Atom_Num:
 			i = 0
-			coefficient = v.num/v.den
+			coefficient = fraction_float(v)
 		case Atom_Var: // TODO: check if vars are the same
 			i = 1
-			coefficient = v.f.num/v.f.den
+			coefficient = fraction_float(v.f)
 		case Atom_Mul:
 			if len(v.factors) != 2 do return
 			num   := v.factors[0].(Atom_Num) or_return
 			pow   := v.factors[1].(Atom_Pow) or_return
 			_      = pow.lhs.(Atom_Var) or_return // TODO: check if vars are the same
 			exp   := pow.rhs.(Atom_Num) or_return
-			exp_f := exp.num/exp.den
+			exp_f := fraction_float(exp)
 			i      = int(exp_f)
 			if f64(i) != exp_f do return
-			coefficient = num.num/num.den
+			coefficient = fraction_float(num)
 		case Atom_Pow:
 			// only integers allowed,
 			// might need to deal with computational round-off later
 			// but false negatives are better than false positives here
 			_      = v.lhs.(Atom_Var) or_return // TODO: check if vars are the same
 			exp   := v.rhs.(Atom_Num) or_return
-			float := exp.num/exp.den
-			i      = int(float)
-			if f64(i) != float do return
+			exp_f := fraction_float(exp)
+			i      = int(exp_f)
+			if f64(i) != exp_f do return
 			coefficient = 1
 		case:
 			return
 		}
 
-		if i >= len(coefficients) || filled[i] {
+		if i >= MAX_POLYNOMIAL_LEN || filled[i] {
 			return
 		}
 
@@ -68,6 +70,21 @@ polynomial_from_atom :: proc (atom: Atom) -> (p: Polynomial, ok: bool)
 	}
 
 	return Polynomial(coefficients[:size]), true
+}
+
+// Returns a slice of derivatives of the same length as the polynomial coefficients
+polynomial_derivatives :: #force_inline proc (p: Polynomial) -> (d: []f64)
+{
+	assert(len(p) <= MAX_POLYNOMIAL_LEN)
+
+	derivatives: [MAX_POLYNOMIAL_LEN]f64
+	d = derivatives[:len(p)]
+
+	for coefficient, i in p {
+		d[i] = coefficient * f64(i)
+	}
+
+	return
 }
 
 /*

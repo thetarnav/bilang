@@ -188,19 +188,25 @@ atom_copy :: proc (src: Atom) -> Atom
 	return {}
 }
 
-atom_new_copy :: proc (src: Atom) -> ^Atom
-{
+@require_results
+atom_new_copy :: proc (src: Atom) -> ^Atom {
 	return new_atom(atom_copy(src))
 }
 
-fraction_sum :: proc (a, b: Fraction) -> Fraction
-{
+@require_results
+fraction_sum :: proc (a, b: Fraction) -> Fraction {
 	return {a.num * b.den + b.num * a.den, a.den * b.den}
 }
 
-fraction_product :: proc (a, b: Fraction) -> Fraction
-{
+@require_results
+fraction_product :: proc (a, b: Fraction) -> Fraction {
 	return {a.num * b.num, a.den * b.den}
+}
+
+@require_results
+fraction_float :: proc (f: Fraction, loc := #caller_location) -> f64 {
+	assert(f.den != 0, "Fraction denominator cannot be zero", loc)
+	return f.num/f.den
 }
 
 atom_sub_by_atom :: proc (dst: ^Atom, sub: Atom)
