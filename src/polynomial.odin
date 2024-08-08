@@ -12,7 +12,7 @@ polynomial_degree :: proc (p: Polynomial) -> int {
 	return p.len-1
 }
 
-polynomial_from_slice :: proc (coefficients: []f64) -> (p: Polynomial) {
+polynomial_from_slice :: proc (coefficients: []f64) -> (p: Polynomial) #no_bounds_check {
 	for coefficient, i in coefficients {
 		p.coefficients[i] = coefficient
 	}
@@ -79,8 +79,7 @@ polynomial_from_atom :: proc (atom: Atom) -> (p: Polynomial, ok: bool) #no_bound
 
 // Returns a slice of derivatives of the same length as the polynomial coefficients
 @require_results
-polynomial_derivatives :: #force_inline proc (p: Polynomial) -> (d: Polynomial)
-{
+polynomial_derivatives :: #force_inline proc (p: Polynomial) -> (d: Polynomial) #no_bounds_check {
 	d.len = p.len
 	for i in 0..<MAX_POLYNOMIAL_LEN {
 		d.coefficients[i] = p.coefficients[i] * f64(i)
