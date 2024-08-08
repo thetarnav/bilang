@@ -27,6 +27,18 @@ x ~= 1.67765...
 		poly: Polynomial,
 	}{
 		{
+			"2*x = 0",
+			polynomial_from_slice({0, 2}),
+		},
+		{
+			"2*x + 3 = 0",
+			polynomial_from_slice({3, 2}),
+		},
+		{
+			"x^2 - 2*x = 0",
+			polynomial_from_slice({0, -2, 1}),
+		},
+		{
 			"-4*x^3 + 6*x^2 + 2 = 0",
 			polynomial_from_slice({2, 0, 6, -4}),
 		},

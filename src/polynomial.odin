@@ -23,15 +23,23 @@ polynomial_from_slice :: proc (coefficients: []f64) -> (p: Polynomial) #no_bound
 @require_results
 polynomial_from_atom :: proc (atom: Atom) -> (p: Polynomial, ok: bool) #no_bounds_check
 {
-	add := atom.(Atom_Add) or_return
-
-	filled: [MAX_POLYNOMIAL_LEN]bool
-
-	if len(add.addends) > MAX_POLYNOMIAL_LEN {
+	addends: []Atom
+	switch a in atom {
+	case Atom_Add:
+		addends = a.addends[:]
+	case Atom_Mul, Atom_Pow, Atom_Num, Atom_Var:
+		addends = {a}
+	case Atom_Div:
 		return
 	}
 
-	for addend in add.addends {
+	if len(addends) > MAX_POLYNOMIAL_LEN {
+		return
+	}
+
+	filled: [MAX_POLYNOMIAL_LEN]bool
+
+	for addend in addends {
 		i: int
 		coefficient: f64
 		#partial switch v in addend {
