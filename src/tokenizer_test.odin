@@ -1,7 +1,7 @@
 package bilang
 
 import "core:log"
-import test "core:testing"
+import "core:testing"
 
 
 Expect_Tokens_Case :: struct {
@@ -158,10 +158,8 @@ a - b = 10 * (5 + 15) / 2
 	},
 }
 
-test_only_name: string
-
 @(test)
-test_tokenizer_cases :: proc(t: ^test.T)
+test_tokenizer_cases :: proc(t: ^testing.T)
 {
 	context.allocator = context.temp_allocator
 
@@ -170,12 +168,6 @@ test_tokenizer_cases :: proc(t: ^test.T)
 	failed_count: int
 
 	for test_case in expected_list {
-		switch test_only_name {
-		case "", test_case.name:
-		case:
-			failed_count += 1
-			continue
-		}
 
 		tokenizer := make_tokenizer(test_case.src)
 
@@ -184,7 +176,7 @@ test_tokenizer_cases :: proc(t: ^test.T)
 		}
 		defer clear_dynamic_array(&tokens)
 
-		good := test.expectf(t,
+		good := testing.expectf(t,
 			len(tokens) == len(test_case.expected),
 			"\n\e[0;32m%q\e[0m:\e[0;31m\n\texpected %d tokens, got %d\n\e[0m",
 			test_case.name, len(test_case.expected), len(tokens),
@@ -193,7 +185,7 @@ test_tokenizer_cases :: proc(t: ^test.T)
 		for token, i in tokens {
 			expected := test_case.expected[i]
 			text := token_string(test_case.src, token)
-			token_good := test.expectf(t,
+			token_good := testing.expectf(t,
 				text == expected.text &&
 				token.kind == expected.kind,
 				"\n\e[0;32m%q\e[0m:\e[0;31m\nexpected tokens[%d] to be %s `%s`, got %s `%s`\n\e[0m%s",

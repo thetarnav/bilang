@@ -1,22 +1,31 @@
 package bilang
 
-Polynomial :: distinct []f64
+MAX_POLYNOMIAL_LEN :: 4 // only allow 4 coefficients for now
+
+Polynomial :: struct {
+	coefficients: [MAX_POLYNOMIAL_LEN]f64,
+	len:  int,
+}
 
 @require_results
 polynomial_degree :: proc (p: Polynomial) -> int {
-	return len(p) - 1
+	return p.len-1
 }
 
-MAX_POLYNOMIAL_LEN :: 4 // only allow 4 coefficients for now
+polynomial_from_slice :: proc (coefficients: []f64) -> (p: Polynomial) {
+	for coefficient, i in coefficients {
+		p.coefficients[i] = coefficient
+	}
+	p.len = len(coefficients)
+	return
+}
 
 @require_results
 polynomial_from_atom :: proc (atom: Atom) -> (p: Polynomial, ok: bool) #no_bounds_check
 {
 	add := atom.(Atom_Add) or_return
 
-	coefficients: [MAX_POLYNOMIAL_LEN]f64
-	filled      : [MAX_POLYNOMIAL_LEN]bool
-	size        : int
+	filled: [MAX_POLYNOMIAL_LEN]bool
 
 	if len(add.addends) > MAX_POLYNOMIAL_LEN {
 		return
@@ -61,29 +70,21 @@ polynomial_from_atom :: proc (atom: Atom) -> (p: Polynomial, ok: bool) #no_bound
 		}
 
 		filled[i] = true
-		coefficients[i] = coefficient
-		size = max(size, i+1)
+		p.coefficients[i] = coefficient
+		p.len = max(p.len, i+1)
 	}
 
-	for is_filled in filled[:size] {
-		if !is_filled do return
-	}
-
-	return Polynomial(coefficients[:size]), true
+	return p, true
 }
 
 // Returns a slice of derivatives of the same length as the polynomial coefficients
-polynomial_derivatives :: #force_inline proc (p: Polynomial) -> (d: []f64)
+@require_results
+polynomial_derivatives :: #force_inline proc (p: Polynomial) -> (d: Polynomial)
 {
-	assert(len(p) <= MAX_POLYNOMIAL_LEN)
-
-	derivatives: [MAX_POLYNOMIAL_LEN]f64
-	d = derivatives[:len(p)]
-
-	for coefficient, i in p {
-		d[i] = coefficient * f64(i)
+	d.len = p.len
+	for i in 0..<MAX_POLYNOMIAL_LEN {
+		d.coefficients[i] = p.coefficients[i] * f64(i)
 	}
-
 	return
 }
 

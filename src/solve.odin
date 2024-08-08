@@ -1,10 +1,12 @@
 package bilang
 
 import "base:runtime"
+
 import "core:log"
 import "core:math"
 import "core:strings"
 
+import "../utils"
 
 Atom :: union #no_nil {
 	Atom_Num,
@@ -100,59 +102,6 @@ atom_pow_make :: proc (lhs, rhs: Atom) -> (pow: Atom_Pow)
 	pow.lhs = new_atom(lhs)
 	pow.rhs = new_atom(rhs)
 	return
-}
-
-@require_results
-atom_from_expr :: proc (
-	expr:             Expr,
-	all_constraints:  ^[dynamic]Constraint,
-	decl_start:       int,                  // index into all_constraints
-) -> Atom
-{
-	switch v in expr {
-	case ^Expr_Ident:
-		var := atom_var_make(v.name)
-
-		// var already in decl constraints
-		for c in all_constraints[decl_start:] {
-			if c.var == v.name do return var
-		}
-		// var not in decl constraints
-		append(all_constraints, Constraint{var = v.name})
-
-		return var
-
-	case ^Expr_Number:
-		return atom_num_make(v.value)
-	case ^Expr_Binary:
-		lhs := atom_from_expr(v.lhs, all_constraints, decl_start)
-		rhs := atom_from_expr(v.rhs, all_constraints, decl_start)
-		
-		switch v.op {
-		case .Add:
-			return atom_add_make(lhs, rhs)
-		case .Sub:
-			atom_neg(&rhs)
-			return atom_add_make(lhs, rhs)
-		case .Mul:
-			return atom_mul_make(lhs, rhs)
-		case .Div:
-			return atom_div_make(lhs, rhs)
-		case .Pow:
-			return atom_pow_make(lhs, rhs)
-		}
-	case ^Expr_Unary:
-		switch v.op {
-		case .Neg:
-			rhs := atom_from_expr(v.rhs, all_constraints, decl_start)
-			atom_neg(&rhs)
-			return rhs
-		case .Pos:
-			return atom_from_expr(v.rhs, all_constraints, decl_start)
-		}
-	}
-
-	return Atom_Num{FRACTION_ZERO}
 }
 
 atom_copy :: proc (src: Atom) -> Atom
@@ -451,10 +400,10 @@ atom_equals :: proc (a_atom, b_atom: Atom) -> bool
 		return is_b_var && a == b
 	case Atom_Add:
 		b, is_b_add := b_atom.(Atom_Add)
-		return is_b_add || slice_equals_by(a.addends[:], b.addends[:], atom_equals)
+		return is_b_add || utils.slice_equals_by(a.addends[:], b.addends[:], atom_equals)
 	case Atom_Mul:
 		b, is_b_mul := b_atom.(Atom_Mul)
-		return is_b_mul || slice_equals_by(a.factors[:], b.factors[:], atom_equals)
+		return is_b_mul || utils.slice_equals_by(a.factors[:], b.factors[:], atom_equals)
 	case Atom_Div:
 		b, is_b_div := b_atom.(Atom_Div)
 		return is_b_div && atom_equals(a.lhs^, b.lhs^) && atom_equals(a.rhs^, b.rhs^)
@@ -485,13 +434,87 @@ atom_equals :: proc (a_atom, b_atom: Atom) -> bool
 // 	)
 // }
 
-@(require_results)
-solve :: proc (decls: []Decl, allocator := context.allocator) -> []Constraint
+@require_results
+constraints_from_decls :: proc (decls: []Decl, allocator := context.allocator) -> []Constraint
 {
 	context.allocator = allocator
 
 	constrs := make([dynamic]Constraint, 0, 16)
 	defer shrink(&constrs)
+
+	for decl in decls {
+		decl_start := len(constrs)
+
+		lhs := atom_from_expr(decl.lhs, &constrs, decl_start)
+		rhs := atom_from_expr(decl.rhs, &constrs, decl_start)
+		
+		for &constr in constrs[decl_start:] {
+			constr.lhs = new_atom(atom_copy(lhs))
+			constr.rhs = new_atom(atom_copy(rhs))
+		}
+
+		// TODO: free lhs and rhs
+	}
+
+	return constrs[:]
+
+	@require_results
+	atom_from_expr :: proc (
+		expr:             Expr,
+		all_constraints:  ^[dynamic]Constraint,
+		decl_start:       int,                  // index into all_constraints
+	) -> Atom
+	{
+		switch v in expr {
+		case ^Expr_Ident:
+			var := atom_var_make(v.name)
+
+			// var already in decl constraints
+			for c in all_constraints[decl_start:] {
+				if c.var == v.name do return var
+			}
+			// var not in decl constraints
+			append(all_constraints, Constraint{var = v.name})
+
+			return var
+
+		case ^Expr_Number:
+			return atom_num_make(v.value)
+		case ^Expr_Binary:
+			lhs := atom_from_expr(v.lhs, all_constraints, decl_start)
+			rhs := atom_from_expr(v.rhs, all_constraints, decl_start)
+			
+			switch v.op {
+			case .Add:
+				return atom_add_make(lhs, rhs)
+			case .Sub:
+				atom_neg(&rhs)
+				return atom_add_make(lhs, rhs)
+			case .Mul:
+				return atom_mul_make(lhs, rhs)
+			case .Div:
+				return atom_div_make(lhs, rhs)
+			case .Pow:
+				return atom_pow_make(lhs, rhs)
+			}
+		case ^Expr_Unary:
+			switch v.op {
+			case .Neg:
+				rhs := atom_from_expr(v.rhs, all_constraints, decl_start)
+				atom_neg(&rhs)
+				return rhs
+			case .Pos:
+				return atom_from_expr(v.rhs, all_constraints, decl_start)
+			}
+		}
+
+		return Atom_Num{FRACTION_ZERO}
+	}
+}
+
+solve :: proc (constrs: []Constraint, allocator := context.allocator)
+{
+	context.allocator = allocator
 
 	/*
 	Display additional information about current state of constraints when debugging
@@ -500,12 +523,12 @@ solve :: proc (decls: []Decl, allocator := context.allocator) -> []Constraint
 		Logger_Data :: struct {
 			logger_proc: runtime.Logger_Proc,
 			logger_data: rawptr,
-			constrs:     ^[dynamic]Constraint,
+			constrs:     []Constraint,
 		}
 		logger_data := Logger_Data{
 			logger_proc = context.logger.procedure,
 			logger_data = context.logger.data,
-			constrs     = &constrs,
+			constrs     = constrs,
 		}
 		context.logger.data = &logger_data
 		context.logger.procedure = proc (
@@ -520,20 +543,6 @@ solve :: proc (decls: []Decl, allocator := context.allocator) -> []Constraint
 			text   := strings.concatenate({text, "\n", output}, context.temp_allocator)
 			data.logger_proc(data.logger_data, level, text, options, location)
 		}
-	}
-
-	for decl in decls {
-		decl_start := len(constrs)
-
-		lhs := atom_from_expr(decl.lhs, &constrs, decl_start)
-		rhs := atom_from_expr(decl.rhs, &constrs, decl_start)
-		
-		for &constr in constrs[decl_start:] {
-			constr.lhs = new_atom(atom_copy(lhs))
-			constr.rhs = new_atom(atom_copy(rhs))
-		}
-
-		// TODO: free lhs and rhs
 	}
 
 	solve_loop: for {
@@ -574,8 +583,6 @@ solve :: proc (decls: []Decl, allocator := context.allocator) -> []Constraint
 		
 		break
 	}
-
-	return constrs[:]
 }
 
 try_substituting_var :: proc (atom: ^Atom, var: Atom_Var, value: Atom, updated: ^bool)
@@ -614,8 +621,8 @@ walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 {
 	#no_bounds_check constr := &constrs[constr_i]
 	
-	walk_atom(constr.lhs, updated)
-	walk_atom(constr.rhs, updated)
+	fold_atom(constr.lhs, updated)
+	fold_atom(constr.rhs, updated)
 
 
 	/*
@@ -715,8 +722,8 @@ walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 	}
 
 	if updated^ {
-		walk_atom(constr.lhs, updated)
-		walk_atom(constr.rhs, updated)
+		fold_atom(constr.lhs, updated)
+		fold_atom(constr.rhs, updated)
 	}
 
 	switch &rhs in constr.rhs {
@@ -748,7 +755,13 @@ walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 	}
 }
 
-walk_atom :: proc (atom: ^Atom, updated: ^bool)
+fold_atom :: proc (atom: ^Atom, updated: ^bool) {
+	for _fold_atom_once(atom) {
+		updated^ = true
+	}
+}
+
+_fold_atom_once :: proc (atom: ^Atom) -> (updated: bool)
 {
 	switch &a in atom {
 	case Atom_Num:
@@ -760,7 +773,7 @@ walk_atom :: proc (atom: ^Atom, updated: ^bool)
 	case Atom_Add:
 		#reverse for &addend, i in a.addends {
 
-			walk_atom(&addend, updated)
+			fold_atom(&addend, &updated)
 
 			switch &v in addend {
 			case Atom_Num:
@@ -768,7 +781,7 @@ walk_atom :: proc (atom: ^Atom, updated: ^bool)
 				if v.num == 0 {
 					unordered_remove(&a.addends, i)
 					log_debug("removing zero")
-					updated^ = true
+					updated = true
 					break
 				}
 
@@ -796,7 +809,7 @@ walk_atom :: proc (atom: ^Atom, updated: ^bool)
 					unordered_remove(&a.addends, i)
 
 					log_debug("folding adding num")
-					updated^ = true
+					updated = true
 					break
 				}
 
@@ -812,7 +825,7 @@ walk_atom :: proc (atom: ^Atom, updated: ^bool)
 					unordered_remove(&a.addends, i)
 
 					log_debug("folding adding same vars")
-					updated^ = true
+					updated = true
 				}
 
 			case Atom_Add:
@@ -825,7 +838,7 @@ walk_atom :: proc (atom: ^Atom, updated: ^bool)
 				append(&a.addends, ..to_add)
 
 				log_debug("folding adding additions")
-				updated^ = true
+				updated = true
 
 			case Atom_Mul, Atom_Div, Atom_Pow:
 				// TODO
@@ -836,16 +849,16 @@ walk_atom :: proc (atom: ^Atom, updated: ^bool)
 		if len(a.addends) == 1 {
 			atom^ = a.addends[0]
 			log_debug("single addend")
-			updated^ = true	
+			updated = true	
 		}
 
 	case Atom_Mul:
-		walk_atom_mul(atom, &a, updated)
+		walk_atom_mul(atom, &a, &updated)
 	
 	case Atom_Div:
 
-		walk_atom(a.lhs, updated)
-		walk_atom(a.rhs, updated)
+		fold_atom(a.lhs, &updated)
+		fold_atom(a.rhs, &updated)
 
 		switch bot in a.rhs {
 		case Atom_Num:
@@ -862,7 +875,7 @@ walk_atom :: proc (atom: ^Atom, updated: ^bool)
 
 			atom^ = a.lhs^
 			log_debug("folding dividing by num")
-			updated^ = true
+			updated = true
 			return // atom is top atom
 			
 		case Atom_Var:
@@ -872,7 +885,7 @@ walk_atom :: proc (atom: ^Atom, updated: ^bool)
 				atom_div(a.lhs, bot.f)
 				atom^ = a.lhs^
 				log_debug("folding dividing by var")
-				updated^ = true
+				updated = true
 				return // atom is now a var
 			}
 		case Atom_Mul, Atom_Div, Atom_Add, Atom_Pow:
@@ -883,11 +896,11 @@ walk_atom :: proc (atom: ^Atom, updated: ^bool)
 		if top_num, is_top_num := a.lhs.(Atom_Num); is_top_num && top_num.f.num == 0 {
 			atom^ = Atom_Num{FRACTION_ZERO}
 			log_debug("dividing zero")
-			updated^ = true
+			updated = true
 		}
 	case Atom_Pow:
-		walk_atom(a.lhs, updated)
-		walk_atom(a.rhs, updated)
+		fold_atom(a.lhs, &updated)
+		fold_atom(a.rhs, &updated)
 
 		// fold num pow
 		// 2^3 -> 8
@@ -900,7 +913,7 @@ walk_atom :: proc (atom: ^Atom, updated: ^bool)
 			atom^ = num
 
 			log_debug("fold num pow")
-			updated^ = true
+			updated = true
 		}
 	}
 
@@ -911,7 +924,7 @@ walk_atom_mul :: proc (atom: ^Atom, mul: ^Atom_Mul, updated: ^bool)
 {
 	#reverse for &factor, i in mul.factors {
 
-		walk_atom(&factor, updated)
+		fold_atom(&factor, updated)
 
 		switch v in factor {
 		case Atom_Num:
@@ -1069,12 +1082,8 @@ try_finding_approximate_solution :: proc (constr: ^Constraint) -> bool
 	atom := atom_copy(constr.lhs^) // rhs is copied by atom_sub_by_atom
 	atom_sub_by_atom(&atom, constr.rhs^)
 
-	// fold whats possible
-	for {
-		updated: bool
-		walk_atom(&atom, &updated)
-		updated or_break	
-	}
+	updated: bool
+	fold_atom(&atom, &updated)
 
 	var := atom_var_make(constr.var)
 
@@ -1101,13 +1110,9 @@ try_finding_approximate_solution :: proc (constr: ^Constraint) -> bool
 			: {sign=true,  bits=u32(-mid)}
 		var_value := atom_num_make(f64(transmute(f32)float))
 
-		updated: bool
 		atom := atom_copy(atom)
 		try_substituting_var(&atom, var, var_value, &updated)
-		for updated {
-			updated = false
-			walk_atom(&atom, &updated)
-		}
+		fold_atom(&atom, &updated)
 
 		// atom_num := atom.(Atom_Num) or_return
 

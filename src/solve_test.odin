@@ -153,7 +153,8 @@ import test "core:testing"
 			continue
 		}
 
-		constrs := solve(decls)
+		constrs := constraints_from_decls(decls)
+		solve(constrs)
 	
 		b := strings.builder_make_len_cap(0, 1024)
 		w := strings.to_writer(&b)
