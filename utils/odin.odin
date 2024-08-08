@@ -1,5 +1,10 @@
 package utils
 
+import "base:intrinsics"
+import "base:runtime"
+
+import "core:fmt"
+
 @require_results
 slice_equals_by :: proc(a, b: $T/[]$E, f: proc (E, E) -> bool) -> bool #no_bounds_check
 {
@@ -22,4 +27,13 @@ array_cast :: proc "contextless" (v: $A/[$N]$E, $T: typeid) -> (w: T)
 		w[i] = cast(intrinsics.type_elem_type(T))(v[i])
 	}
 	return
+}
+
+@(disabled=ODIN_DISABLE_ASSERT)
+assert_equal :: proc (a, b: $T, message := "value assertion", loc := #caller_location)
+	where intrinsics.type_is_comparable(T)
+{
+	if a != b {
+		assert(false, fmt.tprintf("%s: %v != %v", message, a, b), loc)
+	}
 }

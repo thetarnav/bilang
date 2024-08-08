@@ -458,7 +458,6 @@ constraints_from_decls :: proc (decls: []Decl, allocator := context.allocator) -
 
 	return constrs[:]
 
-	@require_results
 	atom_from_expr :: proc (
 		expr:             Expr,
 		all_constraints:  ^[dynamic]Constraint,

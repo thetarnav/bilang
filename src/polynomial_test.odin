@@ -6,6 +6,8 @@ import "core:strings"
 import "core:log"
 import "core:slice"
 
+import "../utils"
+
 /*
 -4x^3+6x^2+2=0
 x ~= 1.67765...
@@ -59,8 +61,8 @@ x ~= 1.67765...
 
 		constrs := constraints_from_decls(decls)
 
-		assert(len(constrs) == 1)
-		assert(constrs[0].rhs.(Atom_Num).num == 0)
+		utils.assert_equal(len(constrs), 1, "constrs length")
+		utils.assert_equal(constrs[0].rhs.(Atom_Num).num, f64(0.0), "rhs value")
 
 		_updated: bool
 		fold_atom(constrs[0].lhs, &_updated)
