@@ -20,20 +20,22 @@ solve_buffer: [mem.Megabyte]byte
 {
 	solve_arena := mem.Arena{data = solve_buffer[:]}
 	context.temp_allocator = mem.arena_allocator(&solve_arena)
+	context.allocator = context.temp_allocator
 
 	input := string(input_buffer[:input_len])
 
-	decls, parse_err := bilang.parse_src(input, context.temp_allocator)
+	decls, parse_err := bilang.parse_src(input)
 
 	if parse_err != nil {
-		err_str := bilang.parser_error_to_string(input, parse_err, context.temp_allocator)
+		err_str := bilang.parser_error_to_string(input, parse_err)
 		output(err_str)
 		return
 	}
 
-	constrs := bilang.solve(decls, context.temp_allocator)
+	constrs := bilang.constraints_from_decls(decls)
+	bilang.solve(constrs)
 
-	constrs_str, alloc_err := bilang.contraints_to_string(constrs, allocator=context.temp_allocator)
+	constrs_str, alloc_err := bilang.contraints_to_string(constrs)
 
 	if alloc_err != nil {
 		output("Error: failed to allocate memory for output")
