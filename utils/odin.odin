@@ -1,7 +1,6 @@
 package utils
 
 import "base:intrinsics"
-import "base:runtime"
 
 import "core:fmt"
 
