@@ -1,5 +1,7 @@
 package bilang
 
+import "core:math"
+
 MAX_POLYNOMIAL_LEN :: 4 // only allow 4 coefficients for now
 
 Polynomial :: struct {
@@ -95,72 +97,58 @@ polynomial_derivatives :: #force_inline proc (p: Polynomial) -> (d: Polynomial) 
 	return
 }
 
-/*
-// Define the function f(x) = x^3 + x^2 + 12x + 8
-double f(double x) {
-    return x * x * x + x * x + 12 * x + 8;
-}
-
-// Define the derivative f'(x) = 3x^2 + 2x + 12
-double f_prime(double x) {
-    return 3 * x * x + 2 * x + 12;
+@require_results
+execute_polynomial :: proc (p: Polynomial, x: f64) -> (result: f64) {
+	result = 1
+	for pow in 0 ..< p.len {
+		x := x
+		for _ in 0 ..< pow {
+			x *= x
+		}
+		x *= p.coefficients[pow]
+		result += x
+	}
+	return
 }
 
 // Bisection method to find an initial guess
-double bisection(double a, double b, double tolerance) {
-    double c;
-    while ((b - a) >= tolerance) {
-        c = (a + b) / 2; // Midpoint
-        if (f(c) == 0.0) {
-            break; // c is a root
-        } else if (f(c) * f(a) < 0) {
-            b = c;
-        } else {
-            a = c;
-        }
-    }
-    return c;
+@require_results
+bisection :: proc (a, b, tolerance: f64, p: Polynomial) -> (guess: f64) {
+	a, b := a, b
+	for b-a >= tolerance {
+		guess = (a+b) / 2 // Midpoint
+		if execute_polynomial(p, guess) == 0.0 {
+			break // c is a root
+		} else if execute_polynomial(p, guess) * execute_polynomial(p, a) < 0 {
+			b = guess
+		} else {
+			a = guess
+		}
+	}
+	return
 }
 
 // Newton-Raphson method
-double newton_raphson(double initial_guess, double tolerance, int max_iter) {
-    double x0 = initial_guess;
-    double x1;
-    int iter = 0;
-    
-    while (iter < max_iter) {
-        x1 = x0 - f(x0) / f_prime(x0);
-        
-        if (fabs(x1 - x0) < tolerance) {
-            break;
-        }
-        
-        x0 = x1;
-        iter++;
-    }
-    
-    if (iter == max_iter) {
-        printf("The method did not converge within the maximum number of iterations.\n");
-        return x0; // Return the best approximation found
-    }
-    
-    return x1;
+@require_results
+newton_raphson :: proc (
+	initial_guess, tolerance: f64,
+	max_iter: int, p: Polynomial,
+) -> (
+	x: f64, found_exact: bool,
+) {
+	derivatives := polynomial_derivatives(p)
+	x = initial_guess
+	
+	for _ in 0 ..< max_iter {
+		fx := execute_polynomial(p, x)
+		if math.abs(fx) < tolerance {
+			return x, true
+		}
+		dfx := execute_polynomial(derivatives, x)
+		if dfx == 0 {
+			return x, false
+		}
+		x -= fx/dfx
+	}
+	return x, false
 }
-
-int main() {
-    double a = -2.0;  // Interval start
-    double b = 0.0;   // Interval end
-    double tolerance = 1e-6;  // Desired precision
-    int max_iter = 1000;  // Maximum number of iterations
-    
-    // Find initial guess using Bisection method
-    double initial_guess = bisection(a, b, tolerance);
-    printf("Initial guess from Bisection method: %lf\n", initial_guess);
-    
-    // Find root using Newton-Raphson method
-    double root = newton_raphson(initial_guess, tolerance, max_iter);
-    printf("Root found: %lf\n", root);
-    
-    return 0;
-}
-*/
