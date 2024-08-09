@@ -99,14 +99,14 @@ polynomial_derivatives :: #force_inline proc (p: Polynomial) -> (d: Polynomial) 
 
 @require_results
 execute_polynomial :: proc (p: Polynomial, x: f64) -> (result: f64) {
-	result = 1
-	for pow in 0 ..< p.len {
-		x := x
-		for _ in 0 ..< pow {
-			x *= x
+	result = p.coefficients[0]
+	for pow in 1 ..< p.len {
+		part := x
+		for _ in 1 ..< pow {
+			part *= x
 		}
-		x *= p.coefficients[pow]
-		result += x
+		part *= p.coefficients[pow]
+		result += part
 	}
 	return
 }
@@ -138,7 +138,7 @@ newton_raphson :: proc (
 ) {
 	derivatives := polynomial_derivatives(p)
 	x = initial_guess
-	
+
 	for _ in 0 ..< max_iter {
 		fx := execute_polynomial(p, x)
 		if math.abs(fx) < tolerance {
