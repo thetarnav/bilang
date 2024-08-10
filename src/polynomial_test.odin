@@ -133,7 +133,7 @@ x ~= 1.67765...
 		},
 		{
 			{2, 0, 6, -4}, // -4x^3 + 6x^2 + 2
-			1.6776507126297788,
+			1.677650698804577,
 			true,
 		},
 	}
@@ -142,7 +142,9 @@ x ~= 1.67765...
 
 		defer free_all(case_allocator)
 
-		initial_guess := bisection(-2, 0, 1e-6, test_case.poly)
+		a := -test_case.poly[0]
+		b :=  test_case.poly[0]
+		initial_guess := bisection(a, b, 1e-6, test_case.poly)
 		solution, found_exact := newton_raphson(initial_guess, 1e-6, 10000, test_case.poly)
 
 		if solution != test_case.solution || found_exact != test_case.found_exact {
