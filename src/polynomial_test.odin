@@ -24,29 +24,29 @@ x ~= 1.67765...
 	context.allocator      = case_allocator
 
 	test_cases := []struct {
-		input:       string,
-		poly:        []f64,
-		derivatives: []f64,
+		input:      string,
+		poly:       Polynomial,
+		derivative: Polynomial,
 	}{
 		{
 			"2*x = 0",
 			{0, 2},
-			{0, 2},
+			{2},
 		},
 		{
 			"2*x + 3 = 0",
 			{3, 2},
-			{0, 2},
+			{2},
 		},
 		{
 			"x^2 - 2*x = 0",
 			{0, -2, 1},
-			{0, -2, 2},
+			{-2, 2},
 		},
 		{
 			"-4*x^3 + 6*x^2 + 2 = 0",
 			{2, 0, 6,   -4},
-			{0, 0, 12, -12},
+			{0, 12, -12},
 		},
 	}
 	
@@ -71,27 +71,32 @@ x ~= 1.67765...
 		_updated: bool
 		fold_atom(constrs[0].lhs, &_updated)
 
-		poly_expected   := polynomial_from_slice(test_case.poly)
-		poly_actual, ok := polynomial_from_atom(constrs[0].lhs^)
-		
-		derivatives_expected := polynomial_from_slice(test_case.derivatives)
-		derivatives_actual   := polynomial_derivatives(poly_actual)
-
+		poly, ok, poly_alloc_err := polynomial_from_atom(constrs[0].lhs^, 4)
 		if !ok {
 			log.errorf("\nCouldn't get polynomial for CASE:\n%s", test_case.input)
 			return
 		}
+		if poly_alloc_err != nil {
+			log.errorf("\nAlloc error for CASE:\n%s", test_case.input)
+			return
+		}
 
 		testing.expectf(t,
-			slice.equal(poly_actual.coefficients[:poly_actual.len], poly_expected.coefficients[:poly_expected.len]),
-			"Polynomials don't match\nCASE:\n%s\n\e[0;32mEXPECTED:\e[0m\n%v\e[0;31mACTUAL:\e[0m\n%v",
-			test_case.input, poly_expected, poly_actual,
+			slice.equal(poly, test_case.poly),
+			"\nPolynomial desn't match for CASE:\n%s\n\e[0;32mEXPECTED:\e[0m\n%v\e[0;31m\nACTUAL:\e[0m\n%v",
+			test_case.input, test_case.poly, poly,
 		)
 
+		derivative, derivative_alloc_err := polynomial_derivative(poly)
+		if derivative_alloc_err != nil {
+			log.errorf("\nAlloc error for CASE:\n%s", test_case.input)
+			return
+		}
+
 		testing.expectf(t,
-			slice.equal(derivatives_actual.coefficients[:derivatives_actual.len], derivatives_expected.coefficients[:derivatives_expected.len]),
-			"Derivatives don't match\nCASE:\n%s\n\e[0;32mEXPECTED:\e[0m\n%v\e[0;31mACTUAL:\e[0m\n%v",
-			test_case.input, derivatives_expected, derivatives_actual,
+			slice.equal(derivative, test_case.derivative),
+			"\nDerivative desn't match for CASE:\n%s\n\e[0;32mEXPECTED:\e[0m\n%v\e[0;31m\nACTUAL:\e[0m\n%v",
+			test_case.input, test_case.derivative, derivative,
 		)
 	}
 }
@@ -107,29 +112,29 @@ x ~= 1.67765...
 	context.allocator      = case_allocator
 
 	test_cases := []struct {
-		poly:        []f64,
-		res:         f64,
+		poly:        Polynomial,
+		solution:    f64,
 		found_exact: bool,
 	}{
 		{
-			{0, 2},
+			{0, 2}, // 2x
 			0,
-			false,
+			true,
 		},
 		{
-			{3, 2},
-			0,
-			false,
+			{3, 2}, // 2x + 3
+			-1.5,
+			true,
 		},
 		{
-			{0, -2, 1},
+			{0, -2, 1}, // x^2 -2x
 			0,
-			false,
+			true,
 		},
 		{
-			{2, 0, 6, -4},
-			1.67765,
-			false,
+			{2, 0, 6, -4}, // -4x^3 + 6x^2 + 2
+			1.6776507126297788,
+			true,
 		},
 	}
 	
@@ -137,12 +142,14 @@ x ~= 1.67765...
 
 		defer free_all(case_allocator)
 
-		poly := polynomial_from_slice(test_case.poly)
+		initial_guess := bisection(-2, 0, 1e-6, test_case.poly)
+		solution, found_exact := newton_raphson(initial_guess, 1e-6, 10000, test_case.poly)
 
-		initial_guess := bisection(-2, 0, 1e-6, poly)
-		solution, found_exact := newton_raphson(initial_guess, 1e-6, 10000, poly)
-
-		testing.expect_value(t, solution, test_case.res)
-		testing.expect_value(t, found_exact, test_case.found_exact)
+		if solution != test_case.solution || found_exact != test_case.found_exact {
+			log.errorf(
+				"\nDifferent results for CASE:\n%v\n\e[0;32mEXPECTED:\e[0m\n%v; %v\e[0;31m\nACTUAL:\e[0m\n%v; %v",
+				test_case.poly, test_case.solution, test_case.found_exact, solution, found_exact,
+			)
+		}
 	}
 }

@@ -2,28 +2,23 @@ package bilang
 
 import "core:math"
 
-MAX_POLYNOMIAL_LEN :: 4 // only allow 4 coefficients for now
-
-Polynomial :: struct {
-	coefficients: [MAX_POLYNOMIAL_LEN]f64,
-	len:  int,
-}
+Polynomial :: distinct []f64
 
 @require_results
 polynomial_degree :: proc (p: Polynomial) -> int {
-	return p.len-1
+	return len(p)-1
 }
 
-polynomial_from_slice :: proc (coefficients: []f64) -> (p: Polynomial) #no_bounds_check {
-	for coefficient, i in coefficients {
-		p.coefficients[i] = coefficient
-	}
-	p.len = len(coefficients)
-	return
-}
+Polynomial_Error :: union {bool, Allocator_Error}
 
 @require_results
-polynomial_from_atom :: proc (atom: Atom) -> (p: Polynomial, ok: bool) #no_bounds_check
+polynomial_from_atom :: proc (
+	atom: Atom, max_len: int,
+	allocator := context.allocator,
+) -> (
+	p: Polynomial,
+	ok: bool, err: Allocator_Error,
+) #no_bounds_check
 {
 	addends: []Atom
 	switch a in atom {
@@ -35,11 +30,9 @@ polynomial_from_atom :: proc (atom: Atom) -> (p: Polynomial, ok: bool) #no_bound
 		return
 	}
 
-	if len(addends) > MAX_POLYNOMIAL_LEN {
-		return
-	}
-
-	filled: [MAX_POLYNOMIAL_LEN]bool
+	buf   := make([]f64,  max_len, allocator) or_return
+	p_set := make([]bool, max_len, context.temp_allocator) or_return
+	p_len := 0
 
 	for addend in addends {
 		i: int
@@ -49,63 +42,84 @@ polynomial_from_atom :: proc (atom: Atom) -> (p: Polynomial, ok: bool) #no_bound
 			i = 0
 			coefficient = fraction_float(v)
 		case Atom_Var: // TODO: check if vars are the same
-			i = 1
+			i = 1	
 			coefficient = fraction_float(v.f)
 		case Atom_Mul:
-			if len(v.factors) != 2 do return
-			num   := v.factors[0].(Atom_Num) or_return
-			pow   := v.factors[1].(Atom_Pow) or_return
-			_      = pow.lhs.(Atom_Var) or_return // TODO: check if vars are the same
-			exp   := pow.rhs.(Atom_Num) or_return
+			if len(v.factors) != 2 {
+				return
+			}
+			num, is_lhs_num  := v.factors[0].(Atom_Num)
+			pow, is_rhs_pow  := v.factors[1].(Atom_Pow)
+			_  , is_base_var := pow.lhs.(Atom_Var) // TODO: check if vars are the same
+			exp, is_exp_num  := pow.rhs.(Atom_Num)
+			if !is_lhs_num || !is_rhs_pow || !is_base_var || !is_exp_num {
+				return
+			}
 			exp_f := fraction_float(exp)
 			i      = int(exp_f)
-			if f64(i) != exp_f do return
+			if f64(i) != exp_f {
+				return
+			}
 			coefficient = fraction_float(num)
 		case Atom_Pow:
 			// only integers allowed,
 			// might need to deal with computational round-off later
 			// but false negatives are better than false positives here
-			_      = v.lhs.(Atom_Var) or_return // TODO: check if vars are the same
-			exp   := v.rhs.(Atom_Num) or_return
+			_  , is_base_var := v.lhs.(Atom_Var) // TODO: check if vars are the same
+			exp, is_exp_num  := v.rhs.(Atom_Num)
+			if !is_base_var || !is_exp_num {
+				return
+			}
 			exp_f := fraction_float(exp)
 			i      = int(exp_f)
-			if f64(i) != exp_f do return
+			if f64(i) != exp_f {
+				return
+			}
 			coefficient = 1
 		case:
 			return
 		}
 
-		if i >= MAX_POLYNOMIAL_LEN || filled[i] {
+		if i >= max_len || p_set[i] {
 			return
 		}
 
-		filled[i] = true
-		p.coefficients[i] = coefficient
-		p.len = max(p.len, i+1)
+		p_set[i] = true
+		buf[i]   = coefficient
+		p_len    = max(p_len, i+1)
 	}
 
-	return p, true
+	return Polynomial(buf[:p_len]), true, nil
 }
 
 // Returns a slice of derivatives of the same length as the polynomial coefficients
 @require_results
-polynomial_derivatives :: #force_inline proc (p: Polynomial) -> (d: Polynomial) #no_bounds_check {
-	d.len = p.len
-	for i in 0..<MAX_POLYNOMIAL_LEN {
-		d.coefficients[i] = p.coefficients[i] * f64(i)
+polynomial_derivative :: proc (
+	p: Polynomial, allocator := context.allocator,
+) -> (
+	d: Polynomial, err: Allocator_Error,
+) #no_bounds_check
+{
+	assert(len(p) > 0)
+	buf := make([]f64, len(p)-1, allocator) or_return
+	for coefficient, i in p[1:] {
+		buf[i] = coefficient * f64(i+1)
 	}
-	return
+	return Polynomial(buf[:len(p)-1]), nil
 }
 
 @require_results
 execute_polynomial :: proc (p: Polynomial, x: f64) -> (result: f64) {
-	result = p.coefficients[0]
-	for pow in 1 ..< p.len {
+	if len(p) <= 0 {
+		return 0
+	}
+	result = p[0]
+	for pow in 1 ..< len(p) {
 		part := x
 		for _ in 1 ..< pow {
 			part *= x
 		}
-		part *= p.coefficients[pow]
+		part *= p[pow]
 		result += part
 	}
 	return
@@ -136,7 +150,10 @@ newton_raphson :: proc (
 ) -> (
 	x: f64, found_exact: bool,
 ) {
-	derivatives := polynomial_derivatives(p)
+	d, err := polynomial_derivative(p, context.temp_allocator)
+	if err != nil {
+		return
+	}
 	x = initial_guess
 
 	for _ in 0 ..< max_iter {
@@ -144,7 +161,7 @@ newton_raphson :: proc (
 		if math.abs(fx) < tolerance {
 			return x, true
 		}
-		dfx := execute_polynomial(derivatives, x)
+		dfx := execute_polynomial(d, x)
 		if dfx == 0 {
 			return x, false
 		}
