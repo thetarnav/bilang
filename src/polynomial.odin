@@ -2,14 +2,12 @@ package bilang
 
 import "core:math"
 
-Polynomial :: distinct []f64
+Polynomial :: distinct []f64 // coefficients
 
 @require_results
 polynomial_degree :: proc (p: Polynomial) -> int {
 	return len(p)-1
 }
-
-Polynomial_Error :: union {bool, Allocator_Error}
 
 @require_results
 polynomial_from_atom :: proc (
@@ -193,4 +191,23 @@ newton_raphson :: proc (
 		old_x, x = x, new_x
 	}
 	return x, false
+}
+
+find_polynomial_root :: proc (p: Polynomial) -> (root: f64, found: bool)
+{
+	if p[0] == 0 {
+		return 0, true
+	}
+
+	a, b := -p[0], p[0]
+	if a > b {
+		a, b = b, a
+	}
+	root, found = bisection(a, b, p)
+
+	if !found {
+		root, found = newton_raphson(root, p)
+	}
+
+	return
 }

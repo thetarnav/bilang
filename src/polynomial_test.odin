@@ -147,24 +147,7 @@ import "../utils"
 
 		defer free_all(case_allocator)
 
-		tolerance: f64 = 1e-6
-		a := -test_case.poly[0]
-		b :=  test_case.poly[0]
-		if a > b {
-			a, b = b, a
-		}
-		root, found := bisection(a, b, test_case.poly)
-
-		if !found {
-			root, found = newton_raphson(root, test_case.poly)
-		}
-
-		// {
-		// 	x: f64 = 1.324717957244746
-		// 	fx := x*x*x - x - 1
-		// 	pfx := execute_polynomial({-1, -1, 0, 1}, x)
-		// 	log.warnf("x^3 -x -1 for x={} is={} and={}", x, fx, pfx)
-		// }
+		root, found := find_polynomial_root(test_case.poly)
 
 		if root != test_case.root || found != test_case.found {
 			log.errorf(
