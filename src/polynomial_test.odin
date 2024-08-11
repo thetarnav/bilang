@@ -107,32 +107,39 @@ import "../utils"
 	context.allocator      = case_allocator
 
 	test_cases := []struct {
-		poly: Polynomial,
-		root: f64,
+		poly:  Polynomial,
+		root:  f64,
+		found: bool,
 	}{
 		{
 			{0, 2}, // 2x
 			0,
+			true,
 		},
 		{
 			{3, 2}, // 2x + 3
 			-1.5,
+			true,
 		},
 		{
 			{0, -2, 1}, // x^2 -2x
 			0,
+			true,
 		},
 		{
 			{-1, -1, 0, 1}, // x^3 -x -1
-			1.3247181739990537,
+			1.324717957244746,
+			true,
 		},
 		{
 			{2, 0, 6, -4}, // -4x^3 + 6x^2 + 2
-			1.6776506988040598,
+			1.67765069880406,
+			false,
 		},
 		{
 			{-5, -2, 0, 2}, // 2x^3 -2x -5
-			1.6005985449336206,
+			1.6005985449336209,
+			false,
 		}
 	}
 	
@@ -149,13 +156,20 @@ import "../utils"
 		root, found := bisection(a, b, test_case.poly)
 
 		if !found {
-			root, found = newton_raphson(root, tolerance, 10000, test_case.poly)
+			root, found = newton_raphson(root, test_case.poly)
 		}
 
-		if root != test_case.root || !found {
+		// {
+		// 	x: f64 = 1.324717957244746
+		// 	fx := x*x*x - x - 1
+		// 	pfx := execute_polynomial({-1, -1, 0, 1}, x)
+		// 	log.warnf("x^3 -x -1 for x={} is={} and={}", x, fx, pfx)
+		// }
+
+		if root != test_case.root || found != test_case.found {
 			log.errorf(
-				"\nIncorrect results for CASE:\n%v\n\e[0;32mEXPECTED:\e[0m\n%v\e[0;31m\nACTUAL:\e[0m\n%v, %v",
-				test_case.poly, test_case.root, root, found,
+				"\nIncorrect results for CASE:\n%v\n\e[0;32mEXPECTED:\e[0m\n%v, %v\e[0;31m\nACTUAL:\e[0m\n%v, %v",
+				test_case.poly, test_case.root, test_case.found, root, found,
 			)
 		}
 	}

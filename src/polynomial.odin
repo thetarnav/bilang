@@ -156,30 +156,41 @@ bisection :: proc (a, b: f64, p: Polynomial) -> (x: f64, found: bool) {
 	}
 }
 
-// Newton-Raphson method
+/*
+Newton-Raphson method to guess root of polynomial
+Uses float accuracy instead of tolerance param
+
+`initial_guess` - initial quess for the root,
+`p`             - polynomial `p(x)`,
+*/
 @require_results
 newton_raphson :: proc (
-	initial_guess, tolerance: f64,
-	max_iter: int, p: Polynomial,
+	initial_guess: f64, p: Polynomial,
 ) -> (
-	x: f64, found_exact: bool,
+	x: f64, found: bool,
 ) {
 	d, err := polynomial_derivative(p, context.temp_allocator)
 	if err != nil {
 		return
 	}
-	x = initial_guess
 
-	for _ in 0 ..< max_iter {
+	x = initial_guess
+	old_x := x
+
+	for {
 		fx := execute_polynomial(p, x)
-		if math.abs(fx) < tolerance {
+		if fx == 0 {
 			return x, true
 		}
 		dfx := execute_polynomial(d, x)
 		if dfx == 0 {
 			return x, false
 		}
-		x -= fx/dfx
+		new_x := x - fx/dfx
+		if new_x == x || new_x == old_x {
+			return x, false
+		}
+		old_x, x = x, new_x
 	}
 	return x, false
 }
