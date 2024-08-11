@@ -179,7 +179,7 @@ newton_raphson :: proc (
 	x = initial_guess
 	old_x := x
 
-	for {
+	for i := 0;; i += 1 {
 		fx := execute_polynomial(p, x)
 		if fx == 0 {
 			return x, true
@@ -189,7 +189,7 @@ newton_raphson :: proc (
 			return x, false
 		}
 		new_x := x - fx/dfx
-		if new_x == x || new_x == old_x {
+		if i > 0 && (new_x == x || new_x == old_x || math.sign(x-old_x) != math.sign(new_x-old_x)) {
 			return x, false
 		}
 		old_x, x = x, new_x

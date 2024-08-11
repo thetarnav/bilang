@@ -146,11 +146,16 @@ import "../utils"
 			-0.6789995144332207, // ? What to do when the float precisions doesn't allow for perfect answer?
 			false,
 		},
-		// {
-		// 	{520, 12, 1}, // x^2 + 12x + 520
-		// 	-0.6789995144332207,
-		// 	false,
-		// },
+		{ // This one doesn't cross the y axis
+			{520, 12, 1}, // x^2 + 12x + 520
+			0.67513140137499406,
+			false,
+		},
+		{ // Has two solutions: ​x=2√139−6, x=−2√139−6 (17.57965224510319, -29.57965224510319)
+			{-520, 12, 1}, // x^2 + 12x - 520
+			-29.57965224510319,
+			true,
+		},
 	}
 	
 	for &test_case in test_cases {

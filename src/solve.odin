@@ -560,13 +560,13 @@ solve :: proc (constrs: []Constraint, allocator := context.allocator)
 		}
 	}
 
-	scratch_allocator := mem.Scratch_Allocator{}
-	mem.scratch_allocator_init(&scratch_allocator, mem.Megabyte, context.temp_allocator)
-	context.temp_allocator = mem.scratch_allocator(&scratch_allocator)
-	defer mem.scratch_allocator_destroy(&scratch_allocator)
+	// scratch_allocator := mem.Scratch_Allocator{}
+	// mem.scratch_allocator_init(&scratch_allocator, mem.Megabyte, context.temp_allocator)
+	// context.temp_allocator = mem.scratch_allocator(&scratch_allocator)
+	// defer mem.scratch_allocator_destroy(&scratch_allocator)
 
 	solve_loop: for {
-		free_all(context.temp_allocator)
+		// free_all(context.temp_allocator)
 
 		updated: bool
 
@@ -593,7 +593,7 @@ solve :: proc (constrs: []Constraint, allocator := context.allocator)
 			}
 			else {
 				// try approximation
-				// try_finding_polynomial_solution(&constr, &updated)
+				try_finding_polynomial_solution(&constr, &updated)
 			}
 
 			if updated {
@@ -638,7 +638,9 @@ try_finding_polynomial_solution :: proc (constr: ^Constraint, updated: ^bool)
 		constr.lhs^ = atom_var_make(constr.var)
 		constr.rhs^ = atom_num_make(root)
 		updated^    = true
+		log_debug("found polynomial solution")
 	}
+
 }
 
 
@@ -769,7 +771,7 @@ walk_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		move exponent to the right
 		x^2 = y  ->  x = y^(1/2)
 		*/
-		if !has_dependency(lhs.rhs^, constr.var) {
+		if !has_dependency(lhs.rhs^, constr.var) && !has_dependency(constr.rhs^, constr.var) {
 			atom_flip(lhs.rhs)
 			constr.lhs, constr.rhs, lhs.lhs = lhs.lhs, constr.lhs, constr.rhs
 
