@@ -40,9 +40,9 @@ import "../utils"
 		},
 		{
 			"-4*x^3 + 6*x^2 + 2 = 0",
-			{2, 0, 6,   -4},
+			{2, 0, 6, -4},
 			{0, 12, -12},
-		},
+		}
 	}
 	
 	for &test_case in test_cases {
@@ -140,7 +140,17 @@ import "../utils"
 			{-5, -2, 0, 2}, // 2x^3 -2x -5
 			1.6005985449336209,
 			false,
-		}
+		},
+		{
+			{8, 12, 1, 1}, // x^3 + x^2 + 12x + 8
+			-0.6789995144332207, // ? What to do when the float precisions doesn't allow for perfect answer?
+			false,
+		},
+		// {
+		// 	{520, 12, 1}, // x^2 + 12x + 520
+		// 	-0.6789995144332207,
+		// 	false,
+		// },
 	}
 	
 	for &test_case in test_cases {

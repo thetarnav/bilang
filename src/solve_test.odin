@@ -130,7 +130,7 @@ import test "core:testing"
 		// }
 	}
 
-	@static arena_buf: [mem.Megabyte]byte
+	@static arena_buf: [10*mem.Megabyte]byte
 	parser_arena: mem.Arena
 	mem.arena_init(&parser_arena, arena_buf[:])
 	case_allocator := mem.arena_allocator(&parser_arena)

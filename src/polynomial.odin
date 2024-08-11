@@ -28,6 +28,10 @@ polynomial_from_atom :: proc (
 		return
 	}
 
+	if len(addends) == 0 {
+		return
+	}
+
 	buf   := make([]f64,  max_len, allocator) or_return
 	p_set := make([]bool, max_len, context.temp_allocator) or_return
 	p_len := 0
@@ -193,8 +197,12 @@ newton_raphson :: proc (
 	return x, false
 }
 
-find_polynomial_root :: proc (p: Polynomial) -> (root: f64, found: bool)
+find_polynomial_root :: proc (p: Polynomial) -> (root: f64, found: bool) #no_bounds_check
 {
+	if len(p) == 0 {
+		return
+	}
+
 	if p[0] == 0 {
 		return 0, true
 	}

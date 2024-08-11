@@ -5,6 +5,7 @@ import "base:runtime"
 import "core:log"
 import "core:math"
 import "core:strings"
+import "core:mem"
 
 import "../utils"
 
@@ -76,7 +77,12 @@ atom_var_make :: proc (name: string, f: Fraction = FRACTION_IDENTITY) -> Atom_Va
 @require_results
 atom_add_make :: proc (lhs, rhs: Atom) -> (add: Atom_Add) #no_bounds_check
 {
-	add.addends = make([dynamic]Atom, 2, 12)
+	addends, err := make([dynamic]Atom, 2, 12)
+	if err != nil {
+		log.error("Allocation Error", err)
+		return
+	}
+	add.addends = addends
 	add.addends[0] = lhs
 	add.addends[1] = rhs
 	return
@@ -84,7 +90,12 @@ atom_add_make :: proc (lhs, rhs: Atom) -> (add: Atom_Add) #no_bounds_check
 @require_results
 atom_mul_make :: proc (lhs, rhs: Atom) -> (mul: Atom_Mul) #no_bounds_check
 {
-	mul.factors = make([dynamic]Atom, 2, 12)
+	factors, err := make([dynamic]Atom, 2, 12)
+	if err != nil {
+		log.error("Allocation Error", err)
+		return
+	}
+	mul.factors = factors
 	mul.factors[0] = lhs
 	mul.factors[1] = rhs
 	return
@@ -415,6 +426,11 @@ atom_equals :: proc (a_atom, b_atom: Atom) -> bool
 	}
 }
 
+is_constraint_solved :: proc (constr: Constraint) -> bool {
+	lhs_var, is_lhs_var := constr.lhs.(Atom_Var)
+	return is_lhs_var && lhs_var.f == FRACTION_IDENTITY && !has_dependencies(constr.rhs^)
+}
+
 // Compares vars by value if they do not contradict
 // constraint_contadicts :: proc (a, b: Constraint) -> bool
 // {
@@ -544,45 +560,87 @@ solve :: proc (constrs: []Constraint, allocator := context.allocator)
 		}
 	}
 
+	scratch_allocator := mem.Scratch_Allocator{}
+	mem.scratch_allocator_init(&scratch_allocator, mem.Megabyte, context.temp_allocator)
+	context.temp_allocator = mem.scratch_allocator(&scratch_allocator)
+	defer mem.scratch_allocator_destroy(&scratch_allocator)
+
 	solve_loop: for {
+		free_all(context.temp_allocator)
+
 		updated: bool
 
-		for _, i in constrs {
-			walk_constraint(i, constrs[:], &updated)
+		for _, constr_i in constrs {
+			walk_constraint(constr_i, constrs[:], &updated)
 		}
 
 		if updated do continue
 
-		// try substituting solved vars
-		for constr, constr_i in constrs {
+		for &constr, constr_i in constrs {
+			
+			if is_constraint_solved(constr) {
+				// try substituting solved vars
+				var := constr.lhs.(Atom_Var)
 
-			lhs_var, is_lhs_var := constr.lhs.(Atom_Var)
-			if !is_lhs_var || has_dependencies(constr.rhs^) {
-				continue
-			}
-
-			for constr2, constr2_i in constrs {
-				if constr_i   != constr2_i &&
-				   constr.var != constr2.var
-				{
-					try_substituting_var(constr2.lhs, lhs_var, constr.rhs^, &updated)
-					try_substituting_var(constr2.rhs, lhs_var, constr.rhs^, &updated)
+				for constr2, constr2_i in constrs {
+					if constr_i   != constr2_i &&
+					   constr.var != constr2.var
+					{
+						try_substituting_var(constr2.lhs, var, constr.rhs^, &updated)
+						try_substituting_var(constr2.rhs, var, constr.rhs^, &updated)
+					}
 				}
 			}
+			else {
+				// try approximation
+				// try_finding_polynomial_solution(&constr, &updated)
+			}
+
+			if updated {
+				continue solve_loop
+			}
 		}
-
-		if updated do continue
-
-		// // try approximation
-		// for &constr in constrs {
-		// 	if try_finding_approximate_solution(&constr) {
-		// 		continue solve_loop
-		// 	}
-		// }
 		
 		break
 	}
 }
+
+try_finding_polynomial_solution :: proc (constr: ^Constraint, updated: ^bool)
+{
+	context.allocator = context.temp_allocator
+
+	if has_dependency_other_than_var(constr.lhs^, constr.var) ||
+	   has_dependency_other_than_var(constr.rhs^, constr.var) {
+		return
+	}
+
+	/*
+	move right to the left to have a single atom equals 0
+	x^2 + x = 12  ->  x^2 + x + -12 = 0
+	*/
+	atom := atom_copy(constr.lhs^) // rhs is copied by atom_sub_by_atom
+	atom_sub_by_atom(&atom, constr.rhs^)
+
+	_atom_updated: bool
+	fold_atom(&atom, &_atom_updated)
+
+	poly, ok, alloc_err := polynomial_from_atom(atom, 4)
+	if !ok {
+		return
+	}
+	if alloc_err != nil {
+		log.error("Allocation error:", alloc_err)
+		return
+	}
+
+	root, found := find_polynomial_root(poly)
+	if found {
+		constr.lhs^ = atom_var_make(constr.var)
+		constr.rhs^ = atom_num_make(root)
+		updated^    = true
+	}
+}
+
 
 try_substituting_var :: proc (atom: ^Atom, var: Atom_Var, value: Atom, updated: ^bool)
 {
@@ -1065,61 +1123,4 @@ walk_atom_mul :: proc (atom: ^Atom, mul: ^Atom_Mul, updated: ^bool)
 		log_debug("single factor")
 		updated^ = true
 	}
-}
-
-try_finding_approximate_solution :: proc (constr: ^Constraint) -> bool
-{
-	if has_dependency_other_than_var(constr.lhs^, constr.var) ||
-	   has_dependency_other_than_var(constr.rhs^, constr.var) {
-		return false
-	}
-
-	/*
-	move right to the left to have a single atom equals 0
-	x^2 + x = 12  ->  x^2 + x + -12 = 0
-	*/
-	atom := atom_copy(constr.lhs^) // rhs is copied by atom_sub_by_atom
-	atom_sub_by_atom(&atom, constr.rhs^)
-
-	updated: bool
-	fold_atom(&atom, &updated)
-
-	var := atom_var_make(constr.var)
-
-	Float :: bit_field u32 {
-		sign: b8  |  1,
-		bits: u32 | 31,
-	}
-
-	MAX_U32: u32 : 0b01111111011111111111111111111111
-	RANGE  : u32 : 0b11111110111111111111111111111110
-
-	MIN_INT :: -int(MAX_U32)
-	MAX_INT ::  int(MAX_U32)
-
-	lo, hi := MIN_INT, MAX_INT
-
-	// TODO: f64
-
-	for {
-		mid := (lo+hi)/2
-		
-		float: Float = mid > 0 \
-			? {sign=false, bits=u32( mid)} \
-			: {sign=true,  bits=u32(-mid)}
-		var_value := atom_num_make(f64(transmute(f32)float))
-
-		atom := atom_copy(atom)
-		try_substituting_var(&atom, var, var_value, &updated)
-		fold_atom(&atom, &updated)
-
-		// atom_num := atom.(Atom_Num) or_return
-
-		break
-
-		// what now?
-	}
-
-
-	return false
 }
