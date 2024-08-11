@@ -8,11 +8,6 @@ import "core:slice"
 
 import "../utils"
 
-/*
--4x^3+6x^2+2=0
-x ~= 1.67765...
-*/
-
 @test test_parsing_polynomials :: proc (t: ^testing.T)
 {
 	@static arena_buf: [mem.Megabyte]byte
@@ -112,45 +107,55 @@ x ~= 1.67765...
 	context.allocator      = case_allocator
 
 	test_cases := []struct {
-		poly:        Polynomial,
-		solution:    f64,
-		found_exact: bool,
+		poly: Polynomial,
+		root: f64,
 	}{
 		{
 			{0, 2}, // 2x
 			0,
-			true,
 		},
 		{
 			{3, 2}, // 2x + 3
 			-1.5,
-			true,
 		},
 		{
 			{0, -2, 1}, // x^2 -2x
 			0,
-			true,
+		},
+		{
+			{-1, -1, 0, 1}, // x^3 -x -1
+			1.3247181739990537,
 		},
 		{
 			{2, 0, 6, -4}, // -4x^3 + 6x^2 + 2
-			1.677650698804577,
-			true,
+			1.6776506988040598,
 		},
+		{
+			{-5, -2, 0, 2}, // 2x^3 -2x -5
+			1.6005985449336206,
+		}
 	}
 	
 	for &test_case in test_cases {
 
 		defer free_all(case_allocator)
 
+		tolerance: f64 = 1e-6
 		a := -test_case.poly[0]
 		b :=  test_case.poly[0]
-		initial_guess := bisection(a, b, 1e-6, test_case.poly)
-		solution, found_exact := newton_raphson(initial_guess, 1e-6, 10000, test_case.poly)
+		if a > b {
+			a, b = b, a
+		}
+		root, found := bisection(a, b, test_case.poly)
 
-		if solution != test_case.solution || found_exact != test_case.found_exact {
+		if !found {
+			root, found = newton_raphson(root, tolerance, 10000, test_case.poly)
+		}
+
+		if root != test_case.root || !found {
 			log.errorf(
-				"\nDifferent results for CASE:\n%v\n\e[0;32mEXPECTED:\e[0m\n%v; %v\e[0;31m\nACTUAL:\e[0m\n%v; %v",
-				test_case.poly, test_case.solution, test_case.found_exact, solution, found_exact,
+				"\nIncorrect results for CASE:\n%v\n\e[0;32mEXPECTED:\e[0m\n%v\e[0;31m\nACTUAL:\e[0m\n%v, %v",
+				test_case.poly, test_case.root, root, found,
 			)
 		}
 	}

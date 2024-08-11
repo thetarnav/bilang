@@ -125,21 +125,35 @@ execute_polynomial :: proc (p: Polynomial, x: f64) -> (result: f64) {
 	return
 }
 
-// Bisection method to find an initial guess
+/*
+Bisection method to guess root of polynomial
+Uses float accuracy instead of tolerance param
+
+`a, b` - range for `x` to try (`a < b`),
+`p`    - polynomial `p(x)`,
+*/
 @require_results
-bisection :: proc (a, b, tolerance: f64, p: Polynomial) -> (guess: f64) {
+bisection :: proc (a, b: f64, p: Polynomial) -> (x: f64, found: bool) {
+	assert(a <= b, "a > b")
 	a, b := a, b
-	for b-a >= tolerance {
-		guess = (a+b) / 2 // Midpoint
-		if execute_polynomial(p, guess) == 0.0 {
-			break // c is a root
-		} else if execute_polynomial(p, guess) * execute_polynomial(p, a) < 0 {
-			b = guess
+	x = math.nan_f64()
+	for {
+		mid := (a+b) / 2
+		if mid == x {
+			return x, false
+		}
+		x = mid
+		fx := execute_polynomial(p, x)
+		if fx == 0 {
+			return x, true
+		}
+		fa := execute_polynomial(p, a)
+		if fx * fa < 0 {
+			b = x
 		} else {
-			a = guess
+			a = x
 		}
 	}
-	return
 }
 
 // Newton-Raphson method
