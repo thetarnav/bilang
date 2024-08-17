@@ -1,8 +1,11 @@
 package bilang
 
 import "core:math"
+import "core:slice"
 
 Polynomial :: distinct []f64 // coefficients
+
+MAX_POLYNOMIAL_LEN :: 4
 
 @require_results
 polynomial_degree :: proc (p: Polynomial) -> int {
@@ -11,87 +14,86 @@ polynomial_degree :: proc (p: Polynomial) -> int {
 
 @require_results
 polynomial_from_atom :: proc (
-	atom: Atom, max_len: int,
+	atom: Atom, var: string,
 	allocator := context.allocator,
 ) -> (
 	p: Polynomial,
-	ok: bool, err: Allocator_Error,
+	ok: bool,
 ) #no_bounds_check
 {
-	addends: []Atom
-	switch a in atom {
-	case Atom_Add:
-		addends = a.addends[:]
-	case Atom_Mul, Atom_Pow, Atom_Num, Atom_Var:
-		addends = {a}
-	case Atom_Div:
-		return
+	@static coeffs: [MAX_POLYNOMIAL_LEN]f64
+	@static filled: [MAX_POLYNOMIAL_LEN]bool
+
+	coeffs = 0
+	filled = false
+
+	State :: struct {
+		var: string,
+		len: int,
 	}
 
-	if len(addends) == 0 {
-		return
+	s := State{var = var}
+
+	if visit_addend(atom, &s) {
+		ok = true
+		p  = Polynomial(slice.clone(coeffs[:s.len], allocator))
 	}
 
-	buf   := make([]f64,  max_len, allocator) or_return
-	p_set := make([]bool, max_len, context.temp_allocator) or_return
-	p_len := 0
+	return
 
-	for addend in addends {
-		i: int
-		coefficient: f64
-		#partial switch v in addend {
-		case Atom_Num:
-			i = 0
-			coefficient = fraction_float(v)
-		case Atom_Var: // TODO: check if vars are the same
-			i = 1	
-			coefficient = fraction_float(v.f)
-		case Atom_Mul:
-			if len(v.factors) != 2 {
-				return
+	visit_addend :: proc (a: Atom, s: ^State) -> (ok: bool) #no_bounds_check
+	{
+		idx := MAX_POLYNOMIAL_LEN // out-of-bounds
+		coeff: f64
+
+		#partial switch a.kind {
+		// a + b
+		case .Add:
+			return visit_addend(a.lhs^, s) && visit_addend(a.rhs^, s)
+		// 123
+		case .Num:
+			idx, coeff = 0, a.num
+		// x
+		case .Var:
+		 	if a.var == s.var {
+				idx, coeff = 1, 1
+		 	}
+		// x^2
+		case .Pow:
+			idx = get_index_from_pow(a, s^)
+			coeff = 1
+		// 2*x^2  or  2*x
+		case .Mul:
+			b: ^Atom
+			switch {
+			case a.lhs.kind == .Num: coeff, b = a.lhs.num, a.rhs
+			case a.rhs.kind == .Num: coeff, b = a.rhs.num, a.lhs
+			case: return
 			}
-			num, is_lhs_num  := v.factors[0].(Atom_Num)
-			pow, is_rhs_pow  := v.factors[1].(Atom_Pow)
-			_  , is_base_var := pow.lhs.(Atom_Var) // TODO: check if vars are the same
-			exp, is_exp_num  := pow.rhs.(Atom_Num)
-			if !is_lhs_num || !is_rhs_pow || !is_base_var || !is_exp_num {
-				return
+
+			switch {
+			case is_var(b^, s.var): idx = 1
+			case b.kind == .Pow   : idx = get_index_from_pow(b^, s^)
 			}
-			exp_f := fraction_float(exp)
-			i      = int(exp_f)
-			if f64(i) != exp_f {
-				return
-			}
-			coefficient = fraction_float(num)
-		case Atom_Pow:
-			// only integers allowed,
-			// might need to deal with computational round-off later
-			// but false negatives are better than false positives here
-			_  , is_base_var := v.lhs.(Atom_Var) // TODO: check if vars are the same
-			exp, is_exp_num  := v.rhs.(Atom_Num)
-			if !is_base_var || !is_exp_num {
-				return
-			}
-			exp_f := fraction_float(exp)
-			i      = int(exp_f)
-			if f64(i) != exp_f {
-				return
-			}
-			coefficient = 1
-		case:
+		}
+
+		if idx >= MAX_POLYNOMIAL_LEN || filled[idx] {
 			return
 		}
 
-		if i >= max_len || p_set[i] {
-			return
-		}
+		filled[idx] = true
+		coeffs[idx] = coeff
+		s.len       = max(s.len, idx+1)
 
-		p_set[i] = true
-		buf[i]   = coefficient
-		p_len    = max(p_len, i+1)
+		return true
 	}
 
-	return Polynomial(buf[:p_len]), true, nil
+	get_index_from_pow :: proc (a: Atom, s: State) -> int {
+		if is_var(a.lhs^, s.var) && a.rhs.kind == .Num && is_int(a.rhs.num) {
+			return int(a.rhs.num)
+		}
+		return MAX_POLYNOMIAL_LEN // out-of-bounds
+	}
 }
 
 // Returns a slice of derivatives of the same length as the polynomial coefficients
