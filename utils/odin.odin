@@ -36,3 +36,8 @@ assert_equal :: proc (a, b: $T, message := "value assertion", loc := #caller_loc
 		assert(false, fmt.tprintf("%s: %v != %v", message, a, b), loc)
 	}
 }
+
+@(disabled=ODIN_DISABLE_ASSERT)
+assertf :: proc (condition: bool, format: string, args: ..any, newline := false, loc := #caller_location) {
+	assert(condition, fmt.tprintf(format, args, newline=newline), loc)
+}
