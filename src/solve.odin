@@ -4,6 +4,7 @@ import "base:runtime"
 
 import "core:math"
 import "core:strings"
+import "core:log"
 
 /*
 atom pointers can be repeated, (same pointers in multiple places)
@@ -36,7 +37,7 @@ Constraint :: struct {
 @require_results
 atom_new :: proc (atom: Atom, loc := #caller_location) -> ^Atom {
 	a, err := new(Atom, loc=loc)
-	assertf(err == nil, "atom_new error: %v", err, loc=loc)
+	log.assertf(err == nil, "atom_new error: %v", err, loc=loc)
 	a^ = atom
 	return a
 }
@@ -115,8 +116,9 @@ atoms_get_mul_val_and_factors :: proc (a, b: ^Atom) -> (val: ^Atom, a_f, b_f: f6
 	return a_val, a_num, b_num, true
 }
 
-atom_num_zero := Atom{kind=.Num, num=0}
-atom_num_one  := Atom{kind=.Num, num=1}
+atom_num_zero    := Atom{kind=.Num, num= 0}
+atom_num_one     := Atom{kind=.Num, num= 1}
+atom_num_neg_one := Atom{kind=.Num, num=-1}
 
 @require_results
 atom_add_if_possible :: proc (a, b: ^Atom) -> (sum: ^Atom, ok: bool)
@@ -292,7 +294,7 @@ atom_mul_num :: proc (atom: ^Atom, f: f64, loc := #caller_location) -> ^Atom {
 }
 @require_results
 atom_neg :: proc (atom: ^Atom, loc := #caller_location) -> ^Atom {
-	return atom_mul_num(atom, -1, loc)
+	return atom_mul(atom, &atom_num_neg_one, loc)
 }
 
 @require_results
@@ -659,7 +661,7 @@ solve :: proc (constrs: []Constraint, allocator := context.allocator)
 				var := constr.lhs.var
 
 				for &constr2, constr2_i in constrs {
-					if constr_i == constr2_i && constr.var == constr2.var {
+					if constr_i == constr2_i || constr.var.var == constr2.var.var {
 						continue
 					}
 

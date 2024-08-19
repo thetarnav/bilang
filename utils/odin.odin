@@ -37,7 +37,6 @@ assert_equal :: proc (a, b: $T, message := "value assertion", loc := #caller_loc
 	}
 }
 
-@(disabled=ODIN_DISABLE_ASSERT)
-assertf :: proc (condition: bool, format: string, args: ..any, newline := false, loc := #caller_location) {
-	assert(condition, fmt.tprintf(format, args, newline=newline), loc)
+is_int :: #force_inline proc (float: f64) -> bool {
+	return f64(int(float)) == float
 }
