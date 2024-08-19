@@ -2,6 +2,7 @@ package bilang
 
 import "core:math"
 import "core:slice"
+import "core:log"
 
 Polynomial :: distinct []f64 // coefficients
 
@@ -16,10 +17,7 @@ polynomial_degree :: proc (p: Polynomial) -> int {
 polynomial_from_atom :: proc (
 	atom: Atom, var: string,
 	allocator := context.allocator,
-) -> (
-	p: Polynomial,
-	ok: bool,
-) #no_bounds_check
+) -> (p: Polynomial, ok: bool) #no_bounds_check
 {
 	@static coeffs: [MAX_POLYNOMIAL_LEN]f64
 	@static filled: [MAX_POLYNOMIAL_LEN]bool
@@ -34,12 +32,15 @@ polynomial_from_atom :: proc (
 
 	s := State{var = var}
 
-	if visit_addend(atom, &s) {
-		ok = true
-		p  = Polynomial(slice.clone(coeffs[:s.len], allocator))
+	visit_addend(atom, &s) or_return
+
+	cloned, err := slice.clone(coeffs[:s.len], allocator)
+	if err != nil {
+		log.error("Allocation error when creaging polynomial:", err)
+		return
 	}
 
-	return
+	return Polynomial(cloned), true
 
 	visit_addend :: proc (a: Atom, s: ^State) -> (ok: bool) #no_bounds_check
 	{

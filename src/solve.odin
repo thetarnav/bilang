@@ -2,7 +2,6 @@ package bilang
 
 import "base:runtime"
 
-import "core:log"
 import "core:math"
 import "core:strings"
 
@@ -816,12 +815,8 @@ try_finding_polynomial_solution :: proc (constr: ^Constraint, updated: ^bool)
 	atom := atom_sub(constr.lhs, constr.rhs)
 	fold_atom(&atom, &_dummy_updated)
 
-	poly, ok, alloc_err := polynomial_from_atom(atom^, 4)
+	poly, ok := polynomial_from_atom(atom^, constr.var)
 	if !ok {
-		return
-	}
-	if alloc_err != nil {
-		log.error("Allocation error:", alloc_err)
 		return
 	}
 

@@ -32,9 +32,16 @@ Writer_Options :: struct {
 	parens: bool,
 }
 
+write_string :: io.write_string
+write_space :: proc (w: io.Writer) {
+	io.write_string(w, " ")
+}
+write_newline :: proc (w: io.Writer) {
+	io.write_string(w, "\n")
+}
 
 @(private)
-_write_f64 :: proc(w: io.Writer, val: f64, n_written: ^int = nil) -> (n: int, err: io.Error) {
+write_f64 :: proc(w: io.Writer, val: f64, n_written: ^int = nil) -> (n: int, err: io.Error) {
 	buf: [386]byte
 
 	str := strconv.append_float(buf[1:], val, 'g', 2*size_of(val), 8*size_of(val))
@@ -51,27 +58,72 @@ _write_f64 :: proc(w: io.Writer, val: f64, n_written: ^int = nil) -> (n: int, er
 	}
 
 	return io.write_string(w, string(s), n_written)
-}	
-
-write_number :: proc(w: io.Writer, n: f64, opts: Writer_Options = {})
-{
-	if opts.highlight do io.write_string(w, "\e[0;33m")
-	_write_f64(w, n)
-	if opts.highlight do io.write_string(w, "\e[0m")
 }
 
-write_punct :: proc(w: io.Writer, c: string, opts: Writer_Options = {})
-{
-	if opts.highlight do io.write_string(w, "\e[38;5;240m")
-	io.write_string(w, c)
-	if opts.highlight do io.write_string(w, "\e[0m")
+Highlight_Kind :: enum {
+	End,
+	Number,
+	Punct,
+	Operator,
 }
 
-write_operator :: proc(w: io.Writer, c: string, opts: Writer_Options = {})
+write_highlight :: proc (w: io.Writer, kind: Highlight_Kind, opts: Writer_Options = {})
 {
-	if opts.highlight do io.write_string(w, "\e[0;36m")
-	io.write_string(w, c)
-	if opts.highlight do io.write_string(w, "\e[0m")
+	if opts.highlight do switch kind {
+	case .End:      write_string(w, "\e[0m")
+	case .Number:   write_string(w, "\e[0;33m")
+	case .Operator: write_string(w, "\e[0;36m")
+	case .Punct:    write_string(w, "\e[38;5;240m")
+	}
+}
+
+write_number :: proc (w: io.Writer, n: f64, opts: Writer_Options = {})
+{
+	write_highlight(w, .Number, opts)
+	write_f64(w, n)
+	write_highlight(w, .End, opts)
+}
+
+write_punct :: proc (w: io.Writer, c: string, opts: Writer_Options = {})
+{
+	write_highlight(w, .Punct, opts)
+	write_string(w, c)
+	write_highlight(w, .End, opts)
+}
+
+write_operator :: proc (w: io.Writer, c: string, opts: Writer_Options = {})
+{
+	write_highlight(w, .Operator, opts)
+	write_string(w, c)
+	write_highlight(w, .End, opts)
+}
+
+write_punct_token :: proc (w: io.Writer, t: Token_Kind, opts: Writer_Options = {})
+{
+	#partial switch t {
+	case .Paren_L: write_punct(w, "(", opts)
+	case .Paren_R: write_punct(w, ")", opts)
+	}
+}
+
+write_operator_token :: proc (w: io.Writer, t: Token_Kind, opts: Writer_Options = {})
+{
+	#partial switch t {
+	case .Eq:  write_operator(w, "=", opts)
+	case .Add: write_operator(w, "+", opts)
+	case .Sub: write_operator(w, "-", opts)
+	case .Mul: write_operator(w, "*", opts)
+	case .Div: write_operator(w, "/", opts)
+	case .Pow: write_operator(w, "^", opts)
+	}
+}
+
+write_paren :: proc (w: io.Writer, t: Token_Kind, opts: Writer_Options = {})
+{
+	assert(t == .Paren_L || t == .Paren_R)
+	if opts.parens {
+		write_punct_token(w, t, opts)
+	}
 }
 
 
@@ -98,9 +150,11 @@ print_decl :: proc (decl: Decl, opts: Writer_Options = {}, fd := os.stdout) {
 }
 write_decl :: proc (w: io.Writer, decl: Decl, opts: Writer_Options = {}) {
 	write_expr(w, decl.lhs, opts)
-	write_operator(w, " = ", opts)
+	write_space(w)
+	write_operator_token(w, .Eq, opts)
+	write_space(w)
 	write_expr(w, decl.rhs, opts)
-	io.write_string(w, "\n")
+	write_newline(w)
 }
 
 print_expr :: proc (expr: Expr, opts: Writer_Options = {}, fd := os.stdout)
@@ -126,31 +180,31 @@ print_binary :: proc (binary: ^Expr_Binary, opts: Writer_Options = {}, fd := os.
 }
 write_binary :: proc (w: io.Writer, binary: ^Expr_Binary, opts: Writer_Options = {})
 {
-	if opts.parens do write_punct(w, "(", opts)
+	write_paren(w, .Paren_L, opts)
 
 	{
 		opts := opts
 		opts.parens = true
 		write_expr(w, binary.lhs, opts)
 	}
-	io.write_string(w, " ")
+	write_space(w)
 
 	switch binary.op {
-	case .Add: write_operator(w, "+", opts)
-	case .Sub: write_operator(w, "-", opts)
-	case .Mul: write_operator(w, "*", opts)
-	case .Div: write_operator(w, "/", opts)
-	case .Pow: write_operator(w, "^", opts)
+	case .Add: write_operator_token(w, .Add, opts)
+	case .Sub: write_operator_token(w, .Sub, opts)
+	case .Mul: write_operator_token(w, .Mul, opts)
+	case .Div: write_operator_token(w, .Div, opts)
+	case .Pow: write_operator_token(w, .Pow, opts)
 	}
 
-	io.write_string(w, " ")
+	write_space(w)
 	{
 		opts := opts
 		opts.parens = true
 		write_expr(w, binary.rhs, opts)
 	}
 
-	if opts.parens do write_punct(w, ")", opts)
+	write_paren(w, .Paren_R, opts)
 }
 
 print_unary :: proc (unary: ^Expr_Unary, opts: Writer_Options = {}, fd := os.stdout)
@@ -160,21 +214,21 @@ print_unary :: proc (unary: ^Expr_Unary, opts: Writer_Options = {}, fd := os.std
 }
 write_unary :: proc (w: io.Writer, unary: ^Expr_Unary, opts: Writer_Options = {})
 {	
-	if opts.parens do write_punct(w, "(", opts)
+	write_paren(w, .Paren_L, opts)
 	
 	switch unary.op {
-	case .Neg: write_operator(w, "-", opts)
-	case .Pos: write_operator(w, "+", opts)
+	case .Neg: write_operator_token(w, .Sub, opts)
+	case .Pos: write_operator_token(w, .Add, opts)
 	}
 
-	io.write_string(w, " ")
+	write_space(w)
 	{
 		opts := opts
 		opts.parens = true
 		write_expr(w, unary.rhs, opts)
 	}
 
-	if opts.parens do write_punct(w, ")", opts)
+	write_paren(w, .Paren_R, opts)
 }
 
 print_ident :: proc (ident: ^Expr_Ident, opts: Writer_Options = {}, fd := os.stdout)
@@ -184,7 +238,7 @@ print_ident :: proc (ident: ^Expr_Ident, opts: Writer_Options = {}, fd := os.std
 }
 write_ident :: proc (w: io.Writer, ident: ^Expr_Ident, opts: Writer_Options = {})
 {
-	io.write_string(w, ident.name)
+	write_string(w, ident.name)
 }
 
 print_number :: proc (number: ^Expr_Number, opts: Writer_Options = {}, fd := os.stdout)
@@ -227,14 +281,16 @@ contraints_to_string :: proc (
 write_contraints :: proc (w: io.Writer, constrs: []Constraint, opts: Writer_Options = {})
 {
 	for constr in constrs {
-		io.write_string(w, constr.var)
+		write_string(w, constr.var)
 		write_punct(w, ": ", opts)
 
 		write_atom(w, constr.lhs^, opts)
-		write_operator(w, " = ", opts)
+		write_space(w)
+		write_operator_token(w, .Eq, opts)
+		write_space(w)
 		write_atom(w, constr.rhs^, opts)
 
-		io.write_string(w, "\n")
+		write_newline(w)
 	}
 }
 
@@ -245,86 +301,38 @@ print_atom :: proc (atom: Atom, opts: Writer_Options = {}, fd := os.stdout)
 }
 write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 {
-	switch a in atom {
-	case Atom_Num:
-		write_fraction(w, a, opts)
-	case Atom_Var:
-		switch a.f.num / a.f.den {
-		case 1:
-			// do nothing
-		case -1:
-			write_operator(w, "-", opts)
-		case:
-			write_fraction(w, a.f, opts)
-			write_operator(w, "*", opts)
-		}
-		
-		io.write_string(w, a.name)
-	case Atom_Add, Atom_Mul, Atom_Div, Atom_Pow:
+	switch atom.kind {
+	case .Num:
+		write_number(w, atom.num, opts)
+	case .Var:
+		write_string(w, atom.var)
+	case .Add, .Mul, .Div, .Pow:
 
 		op: string
-		atoms: []Atom
 		opts := opts
 
-		#partial switch v in a {
-		case Atom_Add:
+		#partial switch atom.kind {
+		case .Add:
 			op = " + "
-			atoms = v.addends[:]
-		case Atom_Mul:
+		case .Mul:
 			op = " * "
-			atoms = v.factors[:]
-		case Atom_Div:
+		case .Div:
 			op = " / "
-			atoms = {v.lhs^, v.rhs^}
-		case Atom_Pow:
+		case .Pow:
 			op = "^"
 			opts.parens = false
-			atoms = {v.lhs^, v.rhs^}
 		}
 
-		if opts.parens {
-			write_punct(w, "(", opts)
-		}
+		write_paren(w, .Paren_L, opts)
 
-
-		for item, i in atoms {
+		{
 			opts := opts
 			opts.parens = true
-			write_atom(w, item, opts)
-			if i < len(atoms)-1 {
-				write_operator(w, op, opts)
-			}
+			write_atom(w, atom.lhs^, opts)
+			write_operator(w, op, opts)
+			write_atom(w, atom.rhs^, opts)
 		}
 
-		if opts.parens {
-			write_punct(w, ")", opts)
-		}
+		write_paren(w, .Paren_R, opts)
 	}
-}
-
-write_fraction :: proc(w: io.Writer, f: Fraction, opts: Writer_Options = {})
-{
-	num := f.num / f.den
-	write_number(w, num, opts)
-	
-	// if f.den == 1 {
-	// 	write_number(w, f.num, highlight)
-	// }
-	// else {
-	// 	if highlight do io.write_string(w, "\e[38;5;240m")
-	// 	io.write_string(w, "(")
-	// 	if highlight do io.write_string(w, "\e[0m")
-
-	// 	write_number(w, f.num, highlight)
-
-	// 	if highlight do io.write_string(w, "\e[0;36m")
-	// 	io.write_string(w, "/")
-	// 	if highlight do io.write_string(w, "\e[0m")
-
-	// 	write_number(w, f.den, highlight)
-
-	// 	if highlight do io.write_string(w, "\e[38;5;240m")
-	// 	io.write_string(w, ")")
-	// 	if highlight do io.write_string(w, "\e[0m")
-	// }
 }
