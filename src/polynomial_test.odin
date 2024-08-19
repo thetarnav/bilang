@@ -60,9 +60,9 @@ import "../utils"
 
 		constrs := constraints_from_decls(decls)
 
-		utils.assert_equal(len(constrs), 1, "constrs length")
+		utils.assert_equal(len(constrs),        1,             "constrs length")
 		utils.assert_equal(constrs[0].rhs.kind, Atom_Kind.Num, "rhs kind")
-		utils.assert_equal(constrs[0].rhs.num, 0, "rhs value")
+		utils.assert_equal(constrs[0].rhs.num,  0,             "rhs value")
 
 		fold_atom(&constrs[0].lhs, &_dummy_updated)
 
@@ -78,11 +78,7 @@ import "../utils"
 			test_case.input, test_case.poly, poly,
 		)
 
-		derivative, derivative_alloc_err := polynomial_derivative(poly)
-		if derivative_alloc_err != nil {
-			log.errorf("\nAlloc error for CASE:\n%s", test_case.input)
-			return
-		}
+		derivative := polynomial_derivative(poly)
 
 		testing.expectf(t,
 			slice.equal(derivative, test_case.derivative),

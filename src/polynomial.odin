@@ -103,7 +103,7 @@ polynomial_derivative :: proc (
 	p: Polynomial, allocator := context.allocator,
 ) -> (
 	d: Polynomial, err: Allocator_Error,
-) #no_bounds_check
+) #no_bounds_check #optional_allocator_error
 {
 	assert(len(p) > 0)
 	buf := make([]f64, len(p)-1, allocator) or_return
