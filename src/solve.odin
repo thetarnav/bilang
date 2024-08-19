@@ -181,7 +181,7 @@ atom_add_if_possible :: proc (a, b: ^Atom) -> (sum: ^Atom, ok: bool)
 }
 @require_results
 atom_add :: proc (a, b: ^Atom, loc := #caller_location) -> ^Atom {
-	return atom_add_if_possible(a, b) or_else atom_binary(.Mul, a, b, loc)
+	return atom_add_if_possible(a, b) or_else atom_binary(.Add, a, b, loc)
 }
 @require_results
 atom_add_num :: proc (atom: ^Atom, f: f64, loc := #caller_location) -> ^Atom {
@@ -319,7 +319,6 @@ atom_div_if_possible :: proc (dividened, divisor: ^Atom) -> (quotient: ^Atom, ok
 	if atom_equals(dividened, divisor) {
 		return &atom_num_one, true
 	}
-
 
 	#partial switch dividened.kind {
 	// x*2 / x  ->  1*2  ->  2
