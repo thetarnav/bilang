@@ -334,32 +334,36 @@ atom_div_if_possible :: proc (dividened, divisor: ^Atom) -> (quotient: ^Atom, ok
 		atom_div(dividened.lhs, divisor),
 		atom_div(dividened.rhs, divisor),
 	), true
-	// (a/b)/c  ->  a/(b*c)
-	case .Div: return atom_div(
-		dividened.lhs,
-		atom_mul(dividened.rhs, divisor),
-	), true
+	case .Div:
+		// (x/y)/x  ->  1/y
+		if lhs, ok := atom_div_if_possible(dividened.lhs, divisor); ok {
+			return atom_div(lhs, dividened.rhs), true
+		}
+		// (a/b)/c  ->  a/(b*c)
+		if rhs, ok := atom_mul_if_possible(dividened.rhs, divisor); ok {
+			return atom_div(dividened.lhs, rhs), true
+		}
 	}
 	
 	return dividened, false
 }
 @require_results
-atom_div :: proc (dividened, divisor: ^Atom) -> ^Atom
+atom_div :: proc (dividened, divisor: ^Atom, loc := #caller_location) -> ^Atom
 {
 	quotient, ok := atom_div_if_possible(dividened, divisor)
 	if !ok {
-		assert(divisor.kind != .Num || divisor.num != 0, "division by zero")
-		quotient = atom_binary(.Div, dividened, divisor)
+		assert(divisor.kind != .Num || divisor.num != 0, "division by zero", loc)
+		quotient = atom_binary(.Div, dividened, divisor, loc)
 	}
 	return quotient
 }
 @require_results
-atom_div_num :: proc (dividened: ^Atom, f: f64) -> ^Atom {
-	return atom_div(dividened, atom_num(f))
+atom_div_num :: proc (dividened: ^Atom, f: f64, loc := #caller_location) -> ^Atom {
+	return atom_div(dividened, atom_num(f, loc), loc)
 }
 @require_results
-atom_flip :: proc (atom: ^Atom) -> ^Atom {
-	return atom_div(atom.rhs, atom.lhs)
+atom_flip :: proc (atom: ^Atom, loc := #caller_location) -> ^Atom {
+	return atom_div(atom.rhs, atom.lhs, loc)
 }
 
 @require_results
