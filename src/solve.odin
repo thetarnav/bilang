@@ -22,7 +22,7 @@ Atom :: struct {
 	},
 }
 
-Atom_Kind :: enum {
+Atom_Kind :: enum u8 {
 	Num,
 	Var,
 	Add,
@@ -30,6 +30,8 @@ Atom_Kind :: enum {
 	Div,
 	Pow,
 }
+
+ATOM_BINARY_KINDS :: bit_set[Atom_Kind]{.Add, .Div, .Mul, .Pow}
 
 Constraint :: struct {
 	var:      ^Atom,
@@ -71,12 +73,10 @@ atom_binary :: proc (kind: Atom_Kind, lhs, rhs: ^Atom, loc := #caller_location) 
 is_var :: proc (atom: Atom, var: string) -> bool {
 	return atom.kind == .Var && atom.var == var
 }
+
 @require_results
 is_binary :: proc (atom: Atom) -> bool {
-	#partial switch atom.kind {
-	case .Add, .Div, .Mul, .Pow: return true
-	case:                        return false
-	}
+	return atom.kind in ATOM_BINARY_KINDS
 }
 
 @require_results
@@ -207,12 +207,14 @@ atom_mul_if_possible :: proc (a, b: ^Atom) -> (product: ^Atom, ok: bool)
 
 	visit_a_b :: proc (a, b: ^Atom) -> (res: ^Atom, ok: bool)
 	{
-		// 2x * 3x  ->  6 * x^2
-		if val, a_f, b_f, ok := atoms_get_mul_val_and_factors(a, b); ok {
-			return atom_binary(.Mul,
-				atom_num(a_f * b_f),
-				atom_pow_num(val, 2),
-			), true
+		// 2 * 3  ->  6
+		if a.kind == .Num && b.kind == .Num {
+			return atom_num(a.num*b.num), true
+		}
+
+		// x * x  ->  x^2
+		if atom_equals(a^, b^) {
+			return atom_pow_num(a, 2), true
 		}
 
 		// (a + b) * (c + d) -> a*c + a*d + b*c + b*d
@@ -261,8 +263,6 @@ atom_mul_if_possible :: proc (a, b: ^Atom) -> (product: ^Atom, ok: bool)
 			// ? 	Also usually you try to get the common factor out of an expression
 			// ? not to it. eg `4a + 4b  ->  4(a + b)` (2 ops < 3 ops)
 			#partial switch a.kind {
-			// 2 * 3  ->  6
-			case .Num: return atom_num(a.num*b.num), true
 			// (a + b) * 4  ->  4a + 4b
 			case .Add: return atom_binary(.Add,
 				atom_mul(a.lhs, b),

@@ -316,7 +316,8 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 		case .Pow: op = "^"
 		}
 		
-		is_nested := is_binary(atom.lhs^) || is_binary(atom.rhs^)
+		is_nested := (atom.lhs.kind != atom.kind && is_binary(atom.lhs^)) ||
+		             (atom.rhs.kind != atom.kind && is_binary(atom.rhs^))
 
 		if is_nested do write_paren(w, .Paren_L, opts)
 		{
