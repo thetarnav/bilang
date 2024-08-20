@@ -42,14 +42,6 @@ is_int :: #force_inline proc (float: f64) -> bool {
 	return f64(int(float)) == float
 }
 
-ALLOCATOR_ERROR_STRING :: [runtime.Allocator_Error]string{
-	.Invalid_Argument     = "Invalid_Argument",
-	.Invalid_Pointer      = "Invalid_Pointer",
-	.Mode_Not_Implemented = "Mode_Not_Implemented",
-	.Out_Of_Memory        = "Out_Of_Memory",
-	.None                 = "None",
-}
-
 alloc_error_message :: proc ($PREFIX: string, err: runtime.Allocator_Error) -> string
 {
 	switch err {
