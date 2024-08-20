@@ -14,7 +14,7 @@ so the value of atom behind a pointer must stay the same,
 when changing the value a new atom must be allocated and pointer changed
 */
 Atom :: struct {
-	kind:     Atom_Kind,
+	kind: Atom_Kind,
 	using _: struct #raw_union {
 		using bin: struct {lhs, rhs: ^Atom},
 		num: f64,
@@ -72,8 +72,8 @@ is_var :: proc (atom: Atom, var: string) -> bool {
 	return atom.kind == .Var && atom.var == var
 }
 @require_results
-is_binary :: proc (kind: Atom_Kind) -> bool {
-	#partial switch kind {
+is_binary :: proc (atom: Atom) -> bool {
+	#partial switch atom.kind {
 	case .Add, .Div, .Mul, .Pow: return true
 	case:                        return false
 	}
@@ -482,22 +482,23 @@ fold_atom :: proc (atom: ^^Atom, updated: ^bool)
 
 	fold_atom_once :: proc (atom: ^Atom) -> (res: ^Atom, updated: bool)
 	{
-		if !is_binary(atom.kind) {
-			return atom, false
+		res = atom
+
+		if !is_binary(atom^) {
+			return
 		}
 
 		fold_atom(&atom.lhs, &updated)
 		fold_atom(&atom.rhs, &updated)
-
-		op_updated: bool
+		
 		#partial switch atom.kind {
-		case .Add: res, op_updated = atom_add_if_possible(atom.lhs, atom.rhs)
-		case .Mul: res, op_updated = atom_mul_if_possible(atom.lhs, atom.rhs)
-		case .Div: res, op_updated = atom_div_if_possible(atom.lhs, atom.rhs)
-		case .Pow: res, op_updated = atom_pow_if_possible(atom.lhs, atom.rhs)
+		case .Add: res = atom_add_if_possible(atom.lhs, atom.rhs) or_return
+		case .Mul: res = atom_mul_if_possible(atom.lhs, atom.rhs) or_return
+		case .Div: res = atom_div_if_possible(atom.lhs, atom.rhs) or_return
+		case .Pow: res = atom_pow_if_possible(atom.lhs, atom.rhs) or_return
 		}
 
-		return res, updated || op_updated
+		return res, true
 	}
 }
 
@@ -507,7 +508,7 @@ try_substituting_var :: proc (atom: ^Atom, var: string, value: ^Atom) -> (res: ^
 		return value, true
 	}
 
-	if is_binary(atom.kind) {
+	if is_binary(atom^) {
 		lhs, lhs_ok := try_substituting_var(atom.lhs, var, value)
 		rhs, rhs_ok := try_substituting_var(atom.rhs, var, value)
 		if lhs_ok || rhs_ok {
