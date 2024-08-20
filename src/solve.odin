@@ -164,22 +164,27 @@ atom_add_if_possible :: proc (a, b: ^Atom) -> (sum: ^Atom, ok: bool)
 
 	visit_b :: proc (a, b: ^Atom) -> (res: ^Atom, ok: bool)
 	{
-		// x + 0  ->  x
-		if b.kind == .Num && b.num == 0 {
-			return a, true
-		}
-
-		if a.kind == .Add {
+		#partial switch b.kind {
+		case .Num:
+			// x + 0  ->  x
+			if b.num == 0 {
+				return a, true
+			}
+		case .Div:
+			// a + (l/r)  ->  (a/1) + (l/r)  ->  (a*r + l)/r
+			if ar, ok := atom_mul_if_possible(a, b.rhs); ok {
+				return atom_div(atom_add(ar, b.lhs), b.rhs), true
+			}
+		case .Add:
 			// (x + y) + x  ->  2x + y
-			if new_lhs, ok := visit_a_b(a.lhs, b); ok {
-				return atom_binary(.Add, new_lhs, a.rhs), true
+			if new_lhs, ok := visit_a_b(b.lhs, a); ok {
+				return atom_binary(.Add, new_lhs, b.rhs), true
 			}
 			// (y + x) + x  ->  y + 2x
-			if new_rhs, ok := visit_a_b(a.rhs, b); ok {
-				return atom_binary(.Add, a.lhs, new_rhs), true
+			if new_rhs, ok := visit_a_b(b.rhs, a); ok {
+				return atom_binary(.Add, b.lhs, new_rhs), true
 			}
 		}
-
 		return
 	}
 }
