@@ -332,10 +332,11 @@ atom_div_if_possible :: proc (dividened, divisor: ^Atom) -> (quotient: ^Atom, ok
 			return atom_mul(dividened.lhs, rhs), true
 		}
 	// (a+b)/c  ->  a/c + b/c
-	case .Add: return atom_add(
-		atom_div(dividened.lhs, divisor),
-		atom_div(dividened.rhs, divisor),
-	), true
+	case .Add:
+		return atom_add(
+			atom_div_if_possible(dividened.lhs, divisor) or_break,
+			atom_div_if_possible(dividened.rhs, divisor) or_break,
+		), true
 	case .Div:
 		// (x/y)/x  ->  1/y
 		if lhs, ok := atom_div_if_possible(dividened.lhs, divisor); ok {
