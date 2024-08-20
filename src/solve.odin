@@ -372,27 +372,6 @@ atom_flip :: proc (atom: ^Atom, loc := #caller_location) -> ^Atom {
 }
 
 @require_results
-is_dividable_by_var :: proc (atom: Atom, var: string) -> bool
-{
-	switch atom.kind {
-	case .Num, .Pow:
-		return false
-	case .Var:
-		return atom.var == var
-	case .Add:
-		return is_dividable_by_var(atom.lhs^, var) &&
-		       is_dividable_by_var(atom.rhs^, var)
-	case .Mul:
-		return is_dividable_by_var(atom.lhs^, var) ||
-		       is_dividable_by_var(atom.rhs^, var)
-	case .Div:
-		return is_dividable_by_var(atom.lhs^, var) &&
-		       !has_dependency(atom.rhs^, var)
-	}
-	return false
-}
-
-@require_results
 has_dependencies :: proc (atom: Atom) -> bool
 {
 	#partial switch atom.kind {
@@ -735,26 +714,7 @@ fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		V	V	V	V	V	V	V	V	V	V
 	*/
 
-	/*
-	extract var and divide rhs
-	2a + 3ab = y  ->  a(2 + 3b) = y  ->  a = y / (2 + 3b)
-	*/
-	if constr.lhs.kind != .Var && is_dividable_by_var(constr.lhs^, constr.var.var) {
-		constr.rhs = atom_div(
-			constr.rhs,
-			atom_div(constr.lhs, constr.var),
-		)
-		constr.lhs = constr.var
-
-		log_debug("extracting var")
-		updated^ = true
-	}
-
-
-	switch constr.lhs.kind {
-	case .Num, .Var, .Mul, .Add:
-		// ignore
-
+	#partial switch constr.lhs.kind {
 	case .Div:
 		// x/2 = y  ->  x = y*2
 		constr.lhs, constr.rhs = constr.lhs.lhs, atom_mul(constr.rhs, constr.lhs.rhs)
@@ -774,6 +734,19 @@ fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 			constr.lhs = constr.lhs.lhs
 
 			log_debug("moved exponent to rhs")
+			updated^ = true
+		}
+	}
+
+	/*
+	extract var and divide rhs
+	2a + 3ab = y  ->  a(2 + 3b) = y  ->  a = y / (2 + 3b)
+	*/
+	if constr.lhs.kind != .Var {
+		if div, ok := atom_div_if_possible(constr.lhs, constr.var); ok {
+			constr.lhs, constr.rhs = constr.var, atom_div(constr.rhs, div)
+
+			log_debug("extracting var")
 			updated^ = true
 		}
 	}
