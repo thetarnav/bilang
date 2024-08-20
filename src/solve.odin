@@ -161,7 +161,6 @@ atom_add_if_possible :: proc (a, b: ^Atom) -> (sum: ^Atom, ok: bool)
 		return
 	}
 	
-
 	visit_b :: proc (a, b: ^Atom) -> (res: ^Atom, ok: bool)
 	{
 		#partial switch b.kind {

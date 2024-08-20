@@ -78,13 +78,13 @@ import test "core:testing"
 			"n: n = (-9.5 + 2*x) / (3.5 + -2*x)\n"+
 			"x: x = (19 + 7*n) / (4*n + 4)\n",
 		},
-		// {
-		// 	"a*b = 0\n",
+		{
+			"a*b = 0\n",
 
-		// 	"a: a = 0\n"+
-		// 	"b: b = 0\n",
-		// 	// TODO: this is not true, it's EITHER a = 0 OR b = 0
-		// },
+			"a: a = 0\n"+
+			"b: b = 0\n",
+			// TODO: this is not true, it's EITHER a = 0 OR b = 0
+		},
 		// {
 		// 	"a/b = 0\n",
 

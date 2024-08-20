@@ -309,30 +309,26 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 	case .Add, .Mul, .Div, .Pow:
 
 		op: string
-		opts := opts
-
 		#partial switch atom.kind {
-		case .Add:
-			op = " + "
-		case .Mul:
-			op = " * "
-		case .Div:
-			op = " / "
-		case .Pow:
-			op = "^"
-			opts.parens = false
+		case .Add: op = "+"
+		case .Mul: op = "*"
+		case .Div: op = "/"
+		case .Pow: op = "^"
 		}
+		
+		is_nested := is_binary(atom.lhs^) || is_binary(atom.rhs^)
 
-		write_paren(w, .Paren_L, opts)
-
+		if is_nested do write_paren(w, .Paren_L, opts)
 		{
 			opts := opts
 			opts.parens = true
+
 			write_atom(w, atom.lhs^, opts)
+			if is_nested do write_space(w)
 			write_operator(w, op, opts)
+			if is_nested do write_space(w)
 			write_atom(w, atom.rhs^, opts)
 		}
-
-		write_paren(w, .Paren_R, opts)
+		if is_nested do write_paren(w, .Paren_R, opts)
 	}
 }
