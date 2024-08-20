@@ -1,10 +1,12 @@
 package bilang
 
 import "base:runtime"
+import "base:intrinsics"
 
 import "core:math"
 import "core:strings"
-import "core:log"
+
+import "../utils"
 
 /*
 atom pointers can be repeated, (same pointers in multiple places)
@@ -37,7 +39,7 @@ Constraint :: struct {
 @require_results
 atom_new :: proc (atom: Atom, loc := #caller_location) -> ^Atom {
 	a, err := new(Atom, loc=loc)
-	log.assertf(err == nil, "atom_new error: %v", err, loc=loc)
+	utils.alloc_error_assert("atom_new error: ", err, loc)
 	a^ = atom
 	return a
 }

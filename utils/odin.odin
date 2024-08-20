@@ -1,6 +1,7 @@
 package utils
 
 import "base:intrinsics"
+import "base:runtime"
 
 import "core:fmt"
 
@@ -39,4 +40,31 @@ assert_equal :: proc (a, b: $T, message := "value assertion", loc := #caller_loc
 
 is_int :: #force_inline proc (float: f64) -> bool {
 	return f64(int(float)) == float
+}
+
+ALLOCATOR_ERROR_STRING :: [runtime.Allocator_Error]string{
+	.Invalid_Argument     = "Invalid_Argument",
+	.Invalid_Pointer      = "Invalid_Pointer",
+	.Mode_Not_Implemented = "Mode_Not_Implemented",
+	.Out_Of_Memory        = "Out_Of_Memory",
+	.None                 = "None",
+}
+
+alloc_error_message :: proc ($PREFIX: string, err: runtime.Allocator_Error) -> string
+{
+	switch err {
+	case .Invalid_Argument:     return PREFIX+"Invalid_Argument"
+	case .Invalid_Pointer:      return PREFIX+"Invalid_Pointer"
+	case .Mode_Not_Implemented: return PREFIX+"Mode_Not_Implemented"
+	case .Out_Of_Memory:        return PREFIX+"Out_Of_Memory"
+	case .None:                 return PREFIX+"None"
+	case:                       return PREFIX+"Unknown"
+	}
+}
+
+@(disabled=ODIN_DISABLE_ASSERT)
+alloc_error_assert :: proc ($PREFIX: string, err: runtime.Allocator_Error, loc := #caller_location) {
+	if err != nil {
+		panic(alloc_error_message("atom_new error: ", err), loc)
+	}
 }
