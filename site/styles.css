@@ -44,19 +44,19 @@ STYLES
 */
 
 :root {
-	--og_dark: #081c15;
-	--og_light: #d8f3dc;
+	--og_dark:   #120f15;
+	--og_light:  #dde1bd;
 	--og_accent: #f4a261;
 
-	--dark: var(--og_dark);
-	--light: var(--og_light);
+	--dark:   var(--og_dark);
+	--light:  var(--og_light);
 	--accent: var(--og_accent);
 }
 
 /* switch dark and light if prefers dark */
 @media (prefers-color-scheme: dark) {
 	:root {
-		--dark: var(--og_light);
+		--dark:  var(--og_light);
 		--light: var(--og_dark);
 	}
 }
