@@ -15,9 +15,8 @@ case "$1" in
 		echo "Building wasm"
 		shift
 		odin build site \
-			-target:js_wasm64p32 \
+			-target:js_wasm32 \
 			-out:site/_main.wasm \
-			-no-entry-point \
 			-error-pos-style:unix \
 			-o:aggressive \
 			-disable-assert \
