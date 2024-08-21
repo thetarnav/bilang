@@ -41,6 +41,7 @@ Constraint :: struct {
 @require_results
 atom_new :: proc (atom: Atom, loc := #caller_location) -> ^Atom {
 	a, err := new(Atom, loc=loc)
+	// TODO: setup a separate allocator for errors
 	utils.alloc_error_assert("atom_new error: ", err, loc)
 	a^ = atom
 	return a
