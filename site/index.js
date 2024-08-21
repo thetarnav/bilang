@@ -3,9 +3,9 @@ import * as odin_env from "./odin_env.js"
 
 /**
  * @typedef  {object} Example_Exports
- * @property {(len: bigint) => void} solve
+ * @property {(len: number) => void} solve
  * @property {() => number}          get_input_ptr
- * @property {() => bigint}          get_input_len
+ * @property {() => number}          get_input_len
  *
  * @typedef {odin_env.Odin_Exports & Example_Exports} Wasm_Exports
  */
@@ -24,7 +24,7 @@ let src_instance = await odin_env.fetchInstanciateWasm("_main.wasm", {
 	env: {
 		/**
 		 * @param {number} ptr 
-		 * @param {bigint} len
+		 * @param {number} len
 		 */
 		output(ptr, len) {
 			textarea_output.value = odin_env.load_string_raw(wasm_state.memory.buffer, ptr, len)
@@ -39,6 +39,8 @@ let exports = /** @type {Wasm_Exports} */ (wasm_state.exports)
 console.log("WASM exports:", exports)
 console.log("WASM memory:", exports.memory)
 
+exports._start() // initialize global vars
+
 textarea_input.value = localStorage.getItem("input") ||
 	"(4*n + 10) / (n + 1) = 3*x\n"+
 	"2*x = 6\n"
@@ -52,7 +54,7 @@ function on_input() {
 	let encoded = new TextEncoder().encode(input)
 	input_buffer.set(encoded)
 	
-	exports.solve(BigInt(encoded.length))
+	exports.solve(encoded.length)
 
 	localStorage.setItem("input", input)
 }

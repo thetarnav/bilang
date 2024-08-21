@@ -1,6 +1,9 @@
 package site
 
+import "base:runtime"
+
 import "core:mem"
+import "core:fmt"
 
 import bilang "../src"
 
@@ -16,11 +19,28 @@ solve_buffer: [mem.Megabyte]byte
 @export get_input_ptr :: proc () -> [^]byte {return raw_data(input_buffer[:])}
 @export get_input_len :: proc () -> int     {return len(input_buffer)}
 
+main :: proc () {} // entry point is required to initialize global vars
+
 @export solve :: proc (input_len: int)
 {
 	solve_arena := mem.Arena{data = solve_buffer[:]}
 	context.temp_allocator = mem.arena_allocator(&solve_arena)
 	context.allocator = context.temp_allocator
+
+	context.logger = {
+		procedure    = proc (
+			data_raw: rawptr,
+			level:    runtime.Logger_Level,
+			text:     string,
+			options:  runtime.Logger_Options,
+			location: runtime.Source_Code_Location,
+		) {
+			fmt.print(text)
+		},
+		data         = {},
+		lowest_level = .Warning,
+		options      = {},
+	}
 
 	input := string(input_buffer[:input_len])
 

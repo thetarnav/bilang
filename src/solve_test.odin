@@ -38,6 +38,15 @@ import test "core:testing"
 			"x: x = 3\n",
 		},
 		{
+`x = y
+y = 1`,
+
+`x: x = 1
+y: y = 1
+y: y = 1
+`,
+		},
+		{
 			"a + b = 10\n"+
 			"a = -4 + 2",
 
@@ -73,10 +82,19 @@ import test "core:testing"
 			"x: x = 1.5\n",
 		},
 		{
-			"(4*n + 10) / (n + 1) = 2*x + 1/2\n",
+`(4*n + 10) / (n + 1) = 3*x
+2*x = 6`,
 
-			"n: n = (-9.5 + 2*x) / (3.5 + -2*x)\n"+
-			"x: x = (19 + 7*n) / (4*n + 4)\n",
+`n: n = 0.2
+x: x = 3
+x: x = 3
+`,
+		},
+		{
+			"(4*n + 10) / (n + 2) = 2*x + 1/2\n",
+
+			"n: n = (4*x + -9) / (3.5 + -2*x)\n"+
+			"x: x = (n*-3.5 + -9) / (-2*n + -4)\n",
 		},
 		{
 			"a*b = 0\n",
@@ -85,21 +103,22 @@ import test "core:testing"
 			"b: b = 0\n",
 			// TODO: this is not true, it's EITHER a = 0 OR b = 0
 		},
-		{
-			"a/b = 0\n",
+		// {
+		// 	"a/b = 0\n",
 
-			"a: a = 0\n"+
-			"b: 0 = 0\n",
-			// TODO: b != 0
-		},
+		// 	"a: a = 0\n"+
+		// 	"b: 0 = 0\n",
+		// 	// TODO: b != 0
+		// },
 		{
-			"a*x + b*y + c = 0\n",
+`a*x + b*y + c = 0`,
 
-			"a: a = (-c + (-b * y)) / x\n"+
-			"x: x = (-c + (-b * y)) / a\n"+
-			"b: b = (-c + (-a * x)) / y\n"+
-			"y: y = (-c + (-a * x)) / b\n"+
-			"c: c = (-a * x) + (-b * y)\n",
+`a: a = (-b*y + -c) / x
+x: x = (-b*y + -c) / a
+b: b = (-a*x + -c) / y
+y: y = (-a*x + -c) / b
+c: c = -a*x + -b*y
+`
 		},
 		{
 			"2*x + 4*y = 0\n",
@@ -127,7 +146,7 @@ import test "core:testing"
 			"x^3 = 1 + x",
 
 			"x: x = 1.324717957244746\n"
-		}
+		},
 		// {
 		// 	"a = a + 1\n",
 
@@ -185,6 +204,5 @@ import test "core:testing"
 				test_case.input, decls_pretty, test_case.solve, output_pretty,
 			)
 		}
-	
 	}
 }

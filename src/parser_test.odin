@@ -50,6 +50,11 @@ import test "core:testing"
 
 			"a = ((0 * 1) + ((2 ^ 3) * 4)) + 5\n",
 		},
+		// {
+		// 	"a = 2^3^4\n",
+
+		// 	"a = 2 ^ (3 ^ 4)\n",
+		// },
 	}
 
 	@static arena_buf: [mem.Megabyte]byte
