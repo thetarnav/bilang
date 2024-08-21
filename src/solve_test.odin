@@ -93,13 +93,14 @@ import test "core:testing"
 		// 	// TODO: b != 0
 		// },
 		{
-			"a*x + b*y + c = 0\n",
+`a*x + b*y + c = 0`,
 
-			"a: a = (-c + (-b * y)) / x\n"+
-			"x: x = (-c + (-b * y)) / a\n"+
-			"b: b = (-c + (-a * x)) / y\n"+
-			"y: y = (-c + (-a * x)) / b\n"+
-			"c: c = (-a * x) + (-b * y)\n",
+`a: a = (-b*y + -c) / x
+x: x = (-b*y + -c) / a
+b: b = (-a*x + -c) / y
+y: y = (-a*x + -c) / b
+c: c = -a*x + -b*y
+`
 		},
 		// {
 		// 	"2*x + 4*y = 0\n",

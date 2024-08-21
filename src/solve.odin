@@ -73,10 +73,13 @@ atom_binary :: proc (kind: Atom_Kind, lhs, rhs: ^Atom, loc := #caller_location) 
 is_var :: proc (atom: Atom, var: string) -> bool {
 	return atom.kind == .Var && atom.var == var
 }
-
 @require_results
 is_binary :: proc (atom: Atom) -> bool {
 	return atom.kind in ATOM_BINARY_KINDS
+}
+@require_results
+is_num :: proc (atom: Atom, num: f64) -> bool {
+	return atom.kind == .Num && atom.num == num
 }
 
 @require_results
@@ -137,11 +140,6 @@ atom_add_if_possible :: proc (a, b: ^Atom) -> (sum: ^Atom, ok: bool)
 		// 2x + 3x  ->  5x
 		if val, a_f, b_f, ok := atoms_get_mul_val_and_factors(a, b); ok {
 			return atom_mul_num(val, a_f+b_f), true
-		}
-
-		// x + x  ->  2x
-		if atom_equals(a, b) {
-			return atom_mul_num(a, 2), true
 		}
 
 		// a/b + c/d  ->  (ad + cb)/bd
@@ -264,7 +262,7 @@ atom_mul_if_possible :: proc (a, b: ^Atom) -> (product: ^Atom, ok: bool)
 			// ? not to it. eg `4a + 4b  ->  4(a + b)` (2 ops < 3 ops)
 			#partial switch a.kind {
 			// (a + b) * 4  ->  4a + 4b
-			case .Add: return atom_binary(.Add,
+			case .Add: return atom_add(
 				atom_mul(a.lhs, b),
 				atom_mul(a.rhs, b),
 			), true
@@ -376,8 +374,7 @@ atom_flip :: proc (atom: ^Atom, loc := #caller_location) -> ^Atom {
 }
 
 @require_results
-has_dependencies :: proc (atom: Atom) -> bool
-{
+has_dependencies :: proc (atom: Atom) -> bool {
 	#partial switch atom.kind {
 	case .Num: return false
 	case .Var: return true
@@ -386,8 +383,7 @@ has_dependencies :: proc (atom: Atom) -> bool
 	}
 }
 @require_results
-has_dependency :: proc (atom: Atom, var: string) -> bool
-{
+has_dependency :: proc (atom: Atom, var: string) -> bool {
 	#partial switch atom.kind {
 	case .Num: return false
 	case .Var: return atom.var == var
@@ -396,8 +392,7 @@ has_dependency :: proc (atom: Atom, var: string) -> bool
 	}
 }
 @require_results
-has_dependency_other_than_var :: proc (atom: Atom, var: string) -> bool
-{
+has_dependency_other_than_var :: proc (atom: Atom, var: string) -> bool {
 	#partial switch atom.kind {
 	case .Num: return false
 	case .Var: return atom.var != var

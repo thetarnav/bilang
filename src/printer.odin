@@ -308,12 +308,28 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 		write_string(w, atom.var)
 	case .Add, .Mul, .Div, .Pow:
 
-		op: string
+		// x*-1  ->  -x
+		display_neg: if atom.kind == .Mul {
+			val: ^Atom
+			if is_num(atom.lhs^, -1) {
+				val = atom.rhs
+			} else if is_num(atom.rhs^, -1) {
+				val = atom.lhs
+			} else {
+				break display_neg
+			}
+
+			write_operator_token(w, .Sub, opts)
+			write_atom(w, val^, opts)
+			return
+		}
+
+		op: Token_Kind
 		#partial switch atom.kind {
-		case .Add: op = "+"
-		case .Mul: op = "*"
-		case .Div: op = "/"
-		case .Pow: op = "^"
+		case .Add: op = .Add
+		case .Mul: op = .Mul
+		case .Div: op = .Div
+		case .Pow: op = .Pow
 		}
 		
 		is_nested := (atom.lhs.kind != atom.kind && is_binary(atom.lhs^)) ||
@@ -326,7 +342,7 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 
 			write_atom(w, atom.lhs^, opts)
 			if is_nested do write_space(w)
-			write_operator(w, op, opts)
+			write_operator_token(w, op, opts)
 			if is_nested do write_space(w)
 			write_atom(w, atom.rhs^, opts)
 		}
