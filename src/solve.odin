@@ -746,21 +746,18 @@ fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		log_debug("move addends to lhs")
 	}
 
-	move_addends :: proc (atom: ^Atom, dst: ^^Atom, var: string, cond: bool) -> (res: ^Atom, updated: bool)
+	move_addends :: proc (atom: ^Atom, dst: ^^Atom, var: string, cond: bool) -> (res: ^Atom, ok: bool)
 	{
 		if atom.kind == .Add {
-			lhs, updated_lhs := move_addends(atom.lhs, dst, var, cond)
-			rhs, updated_rhs := move_addends(atom.rhs, dst, var, cond)
-
-			if updated_lhs || updated_rhs {
+			lhs, lhs_ok := move_addends(atom.lhs, dst, var, cond)
+			rhs, rhs_ok := move_addends(atom.rhs, dst, var, cond)
+			if lhs_ok || rhs_ok {
 				return atom_add(lhs, rhs), true
 			}
-		}
-		else if has_dependency(atom^, var) == cond {
+		} else if has_dependency(atom^, var) == cond {
 			dst^ = atom_sub(dst^, atom)
 			return &atom_num_zero, true
 		}
-
 		return atom, false
 	}
 
@@ -783,22 +780,43 @@ fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		x^2 = y  ->  x = y^(1/2)
 		*/
 		if !has_dependency(constr.lhs.rhs^, constr.var.var) {
-			constr.rhs = atom_pow(
-				constr.rhs,
-				atom_flip(constr.lhs.rhs),
-			)
-			constr.lhs = constr.lhs.lhs
+			constr.lhs, constr.rhs = constr.lhs.lhs, atom_pow(constr.rhs, atom_flip(constr.lhs.rhs))
 
 			log_debug("moved exponent to rhs")
 			updated^ = true
 		}
-	}
 
-	/*
-	extract var and divide rhs
-	2a + 3ab = y  ->  a(2 + 3b) = y  ->  a = y / (2 + 3b)
-	*/
-	if constr.lhs.kind != .Var {
+	case .Mul:
+		/*
+		move factors to rhs
+		2 * x = 1  ->  x = 1/2
+		*/
+		if res, ok := move_factors(constr.lhs, &constr.rhs, constr.var.var); ok {
+			constr.lhs = res
+			updated^   = true
+			log_debug("move factors to rhs")
+		}
+
+		move_factors :: proc (atom: ^Atom, dst: ^^Atom, var: string) -> (res: ^Atom, ok: bool)
+		{
+			if atom.kind == .Mul {
+				lhs, lhs_ok := move_factors(atom.lhs, dst, var)
+				rhs, rhs_ok := move_factors(atom.rhs, dst, var)
+				if lhs_ok || rhs_ok {
+					return atom_mul(lhs, rhs), true
+				}
+			} else if !has_dependency(atom^, var) {
+				dst^ = atom_div(dst^, atom)
+				return &atom_num_one, true
+			}
+			return atom, false
+		}
+
+	case .Add:
+		/*
+		extract var and divide rhs
+		2a + 3ab = y  ->  a(2 + 3b) = y  ->  a = y / (2 + 3b)
+		*/
 		if div, ok := atom_div_extract_var_if_possible(constr.lhs, constr.var.var); ok {
 			constr.lhs, constr.rhs = constr.var, atom_div(constr.rhs, div)
 
