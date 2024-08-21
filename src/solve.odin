@@ -47,8 +47,17 @@ atom_new :: proc (atom: Atom, loc := #caller_location) -> ^Atom {
 	return a
 }
 
+atom_num_zero    := Atom{kind=.Num, num= 0}
+atom_num_one     := Atom{kind=.Num, num= 1}
+atom_num_neg_one := Atom{kind=.Num, num=-1}
+
 @require_results
 atom_num :: proc (num: f64, loc := #caller_location) -> ^Atom {
+	switch num {
+	case  0: return &atom_num_zero
+	case  1: return &atom_num_one
+	case -1: return &atom_num_neg_one
+	}
 	return atom_new({
 		kind = .Num,
 		num  = num,
@@ -121,10 +130,6 @@ atoms_get_mul_val_and_factors :: proc (a, b: ^Atom) -> (val: ^Atom, a_f, b_f: f6
 	atom_equals(a_val, b_val) or_return
 	return a_val, a_num, b_num, true
 }
-
-atom_num_zero    := Atom{kind=.Num, num= 0}
-atom_num_one     := Atom{kind=.Num, num= 1}
-atom_num_neg_one := Atom{kind=.Num, num=-1}
 
 @require_results
 atom_add_if_possible :: proc (a, b: ^Atom) -> (sum: ^Atom, ok: bool)
@@ -448,9 +453,16 @@ has_dependency_other_than_var :: proc (atom: Atom, var: string) -> bool {
 
 @require_results
 atom_pow_if_possible :: proc (base, exponent: ^Atom) -> (pow: ^Atom, ok: bool) {
-	// 2^3  ->  8
-	if base.kind == .Num && exponent.kind == .Num {
-		return atom_num(math.pow(base.num, exponent.num)), true
+	if exponent.kind == .Num {
+		switch exponent.num {
+		case 0: return &atom_num_one, true
+		case 1: return base, true
+		}
+
+		// 2^3  ->  8
+		if base.kind == .Num {
+			return atom_num(math.pow(base.num, exponent.num)), true
+		}
 	}
 
 	return
@@ -462,9 +474,6 @@ atom_pow :: proc (base, exponent: ^Atom) -> ^Atom {
 }
 @require_results
 atom_pow_num :: proc (base: ^Atom, f: f64) -> ^Atom {
-	if f == 1 {
-		return base
-	}
 	return atom_pow(base, atom_num(f))
 }
 
