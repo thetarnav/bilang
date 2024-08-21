@@ -218,12 +218,12 @@ atom_mul_if_possible :: proc (a, b: ^Atom) -> (product: ^Atom, ok: bool)
 
 		// (a + b) * (c + d) -> a*c + a*d + b*c + b*d
 		if a.kind == .Add && b.kind == .Add {
-			return atom_binary(.Add,
-				atom_binary(.Add,
+			return atom_add(
+				atom_add(
 					atom_mul(a.lhs, b.lhs),
 					atom_mul(a.lhs, b.rhs),
 				),
-				atom_binary(.Add,
+				atom_add(
 					atom_mul(a.rhs, b.lhs),
 					atom_mul(a.rhs, b.rhs),
 				),
@@ -351,6 +351,11 @@ atom_div_if_possible :: proc (dividened, divisor: ^Atom) -> (quotient: ^Atom, ok
 		if rhs, ok := atom_mul_if_possible(dividened.rhs, divisor); ok {
 			return atom_div(dividened.lhs, rhs), true
 		}
+	case .Pow:
+		// x^3 / x  ->  x^2
+		if dividened.rhs.kind == .Num && atom_equals(dividened.lhs, divisor) {
+			return atom_pow_num(dividened.lhs, dividened.rhs.num-1), true
+		}
 	}
 	
 	return dividened, false
@@ -376,6 +381,41 @@ atom_flip :: proc (atom: ^Atom) -> ^Atom {
 	case .Num: return atom_num(1/atom.num)
 	case:      return atom_div(&atom_num_one, atom)
 	}
+}
+
+// Different from div_if_possible in that it has to completely remove the var from atom
+@require_results
+atom_div_extract_var_if_possible :: proc (atom: ^Atom, var: string) -> (res: ^Atom, ok: bool)
+{
+	res = atom // fallback
+
+	switch atom.kind {
+	case .Var:
+		if atom.var == var {
+			return &atom_num_one, true
+		}
+	case .Add:
+		lhs := atom_div_extract_var_if_possible(atom.lhs, var) or_return
+		rhs := atom_div_extract_var_if_possible(atom.rhs, var) or_return
+		return atom_add(lhs, rhs), true
+	case .Div:
+		if !has_dependency(atom.rhs^, var) {
+			lhs := atom_div_extract_var_if_possible(atom.lhs, var) or_return
+			return atom_div(lhs, atom.rhs), true
+		}
+	case .Mul:
+		if lhs, ok := atom_div_extract_var_if_possible(atom.lhs, var); ok {
+			if !has_dependency(atom.rhs^, var) {
+				return atom_mul(lhs, atom.rhs), true
+			}
+		} else if rhs, ok := atom_div_extract_var_if_possible(atom.rhs, var); ok {
+			return atom_mul(atom.lhs, rhs), true
+		}
+	case .Pow, .Num:
+		// skip
+	}
+
+	return
 }
 
 @require_results
@@ -422,6 +462,9 @@ atom_pow :: proc (base, exponent: ^Atom) -> ^Atom {
 }
 @require_results
 atom_pow_num :: proc (base: ^Atom, f: f64) -> ^Atom {
+	if f == 1 {
+		return base
+	}
 	return atom_pow(base, atom_num(f))
 }
 
@@ -747,7 +790,7 @@ fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 	2a + 3ab = y  ->  a(2 + 3b) = y  ->  a = y / (2 + 3b)
 	*/
 	if constr.lhs.kind != .Var {
-		if div, ok := atom_div_if_possible(constr.lhs, constr.var); ok {
+		if div, ok := atom_div_extract_var_if_possible(constr.lhs, constr.var.var); ok {
 			constr.lhs, constr.rhs = constr.var, atom_div(constr.rhs, div)
 
 			log_debug("extracting var")
