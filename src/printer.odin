@@ -338,12 +338,15 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 		if is_nested do write_paren(w, .Paren_L, opts)
 		{
 			opts := opts
-			opts.parens = true
-
+			opts.parens = atom.lhs.kind != atom.kind || (atom.kind != .Mul && atom.kind != .Add)
 			write_atom(w, atom.lhs^, opts)
-			if is_nested do write_space(w)
-			write_operator_token(w, op, opts)
-			if is_nested do write_space(w)
+		}
+		if is_nested do write_space(w)
+		write_operator_token(w, op, opts)
+		if is_nested do write_space(w)
+		{
+			opts := opts
+			opts.parens = atom.rhs.kind != atom.kind || (atom.kind != .Mul && atom.kind != .Add)
 			write_atom(w, atom.rhs^, opts)
 		}
 		if is_nested do write_paren(w, .Paren_R, opts)

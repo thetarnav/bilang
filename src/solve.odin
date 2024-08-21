@@ -369,8 +369,12 @@ atom_div_num :: proc (dividened: ^Atom, f: f64, loc := #caller_location) -> ^Ato
 	return atom_div(dividened, atom_num(f, loc), loc)
 }
 @require_results
-atom_flip :: proc (atom: ^Atom, loc := #caller_location) -> ^Atom {
-	return atom_div(atom.rhs, atom.lhs, loc)
+atom_flip :: proc (atom: ^Atom) -> ^Atom {
+	#partial switch atom.kind {
+	case .Div: return atom_div(atom.rhs, atom.lhs)
+	case .Num: return atom_num(1/atom.num)
+	case:      return atom_div(&atom_num_one, atom)
+	}
 }
 
 @require_results
