@@ -227,15 +227,38 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) #no_bounds_che
 			bin.rhs = parse_expr_atom(p) or_return
 	
 			if precedence_table[op] <= precedence_table[bin_last.op] {
-				if precedence_table[op] <= precedence_table[bin_expr.op] {
-					bin.lhs  = expr
+				if precedence_table[op] <= precedence_table[bin_expr.op] &&
+				   op != .Pow /* exponentiation is right-associative */ {
+					/*     +
+					|     / \
+					|    *   c
+					|   / \
+					|  a   b
+					*/
+					bin.lhs  = bin_expr
 					expr     = bin
 					bin_expr = bin
 				} else {
+					/* (a + b^c * d)   +  <- bin_expr
+					|                 / \   
+					|                a   *  
+					|                   / \ 
+					|     bin_last ->  ^   d
+					|                 / \   
+					|                b   c
+					*/   
 					bin.lhs      = bin_expr.rhs
 					bin_expr.rhs = bin
 				}
 			} else {
+				/* (a + b * c^d)   +  <- bin_expr
+				|                 / \      
+				|                a   *  <- bin_last    
+				|                   / \    
+				|                  b   ^   
+				|                     / \  
+				|                    c   d
+				*/                                                   
 				bin.lhs      = bin_last.rhs
 				bin_last.rhs = bin
 			}
