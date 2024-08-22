@@ -199,72 +199,72 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) #no_bounds_che
 
 	expr = parse_expr_atom(p) or_return
 
-	binary_block: {
-		op := token_to_binary_op(p.token.kind) or_break binary_block
-	
-		bin := new(Expr_Binary, p.allocator) or_return
-	
+	op, is_bin_op := token_to_binary_op(p.token.kind)
+	if !is_bin_op do return
+
+	bin := new(Expr_Binary, p.allocator) or_return
+
+	bin.op       = op
+	bin.op_token = p.token
+	bin.lhs      = expr
+
+	parser_next_token(p)
+	bin.rhs = parse_expr_atom(p) or_return
+
+	bin_expr := bin
+	bin_last := bin
+	expr      = bin
+
+	for {
+		op, is_bin_op = token_to_binary_op(p.token.kind)
+		if !is_bin_op do return
+
+		bin = new(Expr_Binary, p.allocator) or_return
+
 		bin.op       = op
 		bin.op_token = p.token
-		bin.lhs      = expr
-	
+
 		parser_next_token(p)
 		bin.rhs = parse_expr_atom(p) or_return
-	
-		bin_expr := bin
-		bin_last := bin
-		expr = bin
-	
-		for {
-			op = token_to_binary_op(p.token.kind) or_break binary_block
-	
-			bin = new(Expr_Binary, p.allocator) or_return
-	
-			bin.op       = op
-			bin.op_token = p.token
-	
-			parser_next_token(p)
-			bin.rhs = parse_expr_atom(p) or_return
-	
-			if precedence_table[op] <= precedence_table[bin_last.op] {
-				if precedence_table[op] <= precedence_table[bin_expr.op] &&
-				   op != .Pow /* exponentiation is right-associative */ {
-					/*     +
-					|     / \
-					|    *   c
-					|   / \
-					|  a   b
-					*/
-					bin.lhs  = bin_expr
-					expr     = bin
-					bin_expr = bin
-				} else {
-					/* (a + b^c * d)   +  <- bin_expr
-					|                 / \   
-					|                a   *  
-					|                   / \ 
-					|     bin_last ->  ^   d
-					|                 / \   
-					|                b   c
-					*/   
-					bin.lhs      = bin_expr.rhs
-					bin_expr.rhs = bin
-				}
+
+		if precedence_table[op] <= precedence_table[bin_last.op] {
+			if precedence_table[op] <= precedence_table[bin_expr.op] &&
+			   op != .Pow /* exponentiation is right-associative */ {
+				/*     +
+				|     / \
+				|    *   c
+				|   / \
+				|  a   b
+				*/
+				bin.lhs  = bin_expr
+				expr     = bin
+				bin_expr = bin
 			} else {
-				/* (a + b * c^d)   +  <- bin_expr
-				|                 / \      
-				|                a   *  <- bin_last    
-				|                   / \    
-				|                  b   ^   
-				|                     / \  
-				|                    c   d
-				*/                                                   
-				bin.lhs      = bin_last.rhs
-				bin_last.rhs = bin
+				/* (a + b^c * d)   +  <- bin_expr
+				|                 / \   
+				|                a   *  
+				|                   / \ 
+				|     bin_last ->  ^   d
+				|                 / \   
+				|                b   c
+				*/   
+				bin.lhs      = bin_expr.rhs
+				bin_expr.rhs = bin
 			}
-			
-			bin_last = bin
+		} else {
+			/* (a + b * c^d)   +  <- bin_expr
+			|                 / \      
+			|                a   *  <- bin_last    
+			|                   / \    
+			|                  b   ^   
+			|                     / \  
+			|                    c   d
+			*/                                                   
+			bin.lhs      = bin_last.rhs
+			bin_last.rhs = bin
 		}
+		
+		bin_last = bin
 	}
 
 	return
