@@ -6,9 +6,8 @@ import "core:strings"
 
 
 Decl :: struct {
-	lhs     : Expr,
 	op_token: Token,
-	rhs     : Expr,
+	lhs, rhs: Expr,
 }
 
 Expr :: union {
@@ -20,62 +19,36 @@ Expr :: union {
 
 Expr_Ident :: struct {
 	token: Token,
-	name : string,
 }
 
 Expr_Number :: struct {
 	token: Token,
-	value: f64,
 }
 
 Expr_Unary :: struct {
-	op      : Expr_Unary_Op,
 	op_token: Token,
 	rhs     : Expr,
 }
 
 Expr_Binary :: struct {
-	lhs     : Expr,
-	op      : Expr_Binary_Op,
 	op_token: Token,
-	rhs     : Expr,
+	lhs, rhs: Expr,
 }
 
-Expr_Unary_Op :: enum {
-	Pos,
-	Neg,
+tokens_unary := #partial [Token_Kind]bool{
+	.Add = true,
+	.Sub = true,
 }
 
-Expr_Binary_Op :: enum {
-	Add,
-	Sub,
-	Mul,
-	Div,
-	Pow,
+tokens_binary := #partial [Token_Kind]bool{
+	.Add = true,
+	.Sub = true,
+	.Mul = true,
+	.Div = true,
+	.Pow = true,
 }
 
-token_to_unary_op :: #force_inline proc (kind: Token_Kind) -> (op: Expr_Unary_Op, ok: bool)
-{
-	#partial switch kind {
-	case .Add: return .Pos, true
-	case .Sub: return .Neg, true
-	}
-	return
-}
-
-token_to_binary_op := #force_inline proc (kind: Token_Kind) -> (op: Expr_Binary_Op, ok: bool)
-{
-	#partial switch kind {
-	case .Add: return .Add, true
-	case .Sub: return .Sub, true
-	case .Mul: return .Mul, true
-	case .Div: return .Div, true
-	case .Pow: return .Pow, true
-	}
-	return
-}
-
-precedence_table := [Expr_Binary_Op]int {
+precedence_table := #partial [Token_Kind]int{
 	.Add = 1,
 	.Sub = 1,
 	.Mul = 2,
@@ -86,16 +59,11 @@ precedence_table := [Expr_Binary_Op]int {
 Parse_Error :: union {
 	Allocator_Error,
 	Unexpected_Token_Error,
-	Invalid_Number_Literal_Error,
 }
 
 Allocator_Error :: mem.Allocator_Error
 
 Unexpected_Token_Error :: struct {
-	token: Token,
-}
-
-Invalid_Number_Literal_Error :: struct {
 	token: Token,
 }
 
@@ -199,12 +167,10 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) #no_bounds_che
 
 	expr = parse_expr_atom(p) or_return
 
-	op, is_bin_op := token_to_binary_op(p.token.kind)
+	is_bin_op := tokens_binary[p.token.kind]
 	if !is_bin_op do return
 
 	bin := new(Expr_Binary, p.allocator) or_return
-
-	bin.op       = op
 	bin.op_token = p.token
 	bin.lhs      = expr
 
@@ -216,20 +182,18 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) #no_bounds_che
 	expr      = bin
 
 	for {
-		op, is_bin_op = token_to_binary_op(p.token.kind)
+		is_bin_op = tokens_binary[p.token.kind]
 		if !is_bin_op do return
 
 		bin = new(Expr_Binary, p.allocator) or_return
-
-		bin.op       = op
 		bin.op_token = p.token
 
 		parser_next_token(p)
 		bin.rhs = parse_expr_atom(p) or_return
 
-		if precedence_table[op] <= precedence_table[bin_last.op] {
-			if precedence_table[op] <= precedence_table[bin_expr.op] &&
-			   op != .Pow /* exponentiation is right-associative */ {
+		if precedence_table[bin.op_token.kind] <= precedence_table[bin_last.op_token.kind] {
+			if precedence_table[bin.op_token.kind] <= precedence_table[bin_expr.op_token.kind] &&
+			   bin.op_token.kind != .Pow /* exponentiation is right-associative */ {
 				/*     +
 				|     / \
 				|    *   c
@@ -303,17 +267,9 @@ parse_paren :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error)
 @(require_results)
 parse_unary :: proc (p: ^Parser) -> (unary: ^Expr_Unary, err: Parse_Error)
 {
-	op: Expr_Unary_Op
-
-	#partial switch p.token.kind {
-	case .Add: op = .Pos
-	case .Sub: op = .Neg
-	case: unreachable()
-	}
+	assert(tokens_unary[p.token.kind])
 
 	unary = new(Expr_Unary, p.allocator) or_return
-
-	unary.op = op
 	unary.op_token = p.token
 
 	parser_next_token(p)
@@ -328,7 +284,6 @@ parse_ident :: proc (p: ^Parser) -> (ident: ^Expr_Ident, err: Parse_Error)
 	assert(p.token.kind == .Ident)
 
 	ident = new(Expr_Ident, p.allocator) or_return
-	ident.name = token_string(p.src, p.token)
 	ident.token = p.token
 
 	parser_next_token(p)
@@ -342,18 +297,15 @@ parse_number :: proc (p: ^Parser) -> (number: ^Expr_Number, err: Parse_Error)
 	assert(p.token.kind == .Num)
 
 	number = new(Expr_Number, p.allocator) or_return
-	
-	value, ok := strconv.parse_f64(token_string(p.src, p.token))
-	if !ok {
-		err = Invalid_Number_Literal_Error{p.token}
-	}
-
-	number.value = value
 	number.token = p.token
 
 	parser_next_token(p)
 
 	return
+}
+
+expr_number_value :: proc (expr: Expr_Number) -> (value: f64, ok: bool) {
+	return strconv.parse_f64(expr.token.text)
 }
 
 /*
@@ -380,11 +332,6 @@ parser_error_to_string :: proc (
 	case Unexpected_Token_Error:
 		text, err = strings.concatenate({
 			"Unexpected token: ",
-			display_token_in_line(src, e.token),
-		})
-	case Invalid_Number_Literal_Error:
-		text, err = strings.concatenate({
-			"Invalid number literal: ",
 			display_token_in_line(src, e.token),
 		})
 	}

@@ -600,27 +600,30 @@ constraints_from_decls :: proc (decls: []Decl, allocator := context.allocator) -
 	return constrs[:]
 
 	atom_from_expr :: proc (
-		expr:            Expr,
+		expr: Expr,
 		all_constraints: ^[dynamic]Constraint,
 		decl_start:      int,                  // index into all_constraints
 	) -> (a: ^Atom)
 	{
 		switch v in expr {
 		case ^Expr_Ident:
-			a = atom_var(v.name)
+			name := v.token.text
+			a = atom_var(name)
 			
 			for c in all_constraints[decl_start:] {
-				if c.var.var == v.name do return a
+				if c.var.var == name do return a
 			}
 			// var not in decl constraints
 			append(all_constraints, Constraint{var = a})
 
 		case ^Expr_Number:
-			return atom_num(v.value)
+			value, _ := expr_number_value(v^)
+			// TODO: handle errors
+			return atom_num(value)
 			
 		case ^Expr_Unary:
 			a = atom_from_expr(v.rhs, all_constraints, decl_start)
-			if v.op == .Neg {
+			if v.op_token.kind == .Sub {
 				a = atom_neg(a)
 			}
 
@@ -630,7 +633,7 @@ constraints_from_decls :: proc (decls: []Decl, allocator := context.allocator) -
 				rhs = atom_from_expr(v.rhs, all_constraints, decl_start),
 			})
 			
-			switch v.op {
+			#partial switch v.op_token.kind {
 			case .Add: a.kind = .Add
 			case .Sub: a.kind = .Add
 			           a.rhs  = atom_neg(a.rhs)

@@ -188,15 +188,7 @@ write_binary :: proc (w: io.Writer, binary: ^Expr_Binary, opts: Writer_Options =
 		write_expr(w, binary.lhs, opts)
 	}
 	write_space(w)
-
-	switch binary.op {
-	case .Add: write_operator_token(w, .Add, opts)
-	case .Sub: write_operator_token(w, .Sub, opts)
-	case .Mul: write_operator_token(w, .Mul, opts)
-	case .Div: write_operator_token(w, .Div, opts)
-	case .Pow: write_operator_token(w, .Pow, opts)
-	}
-
+	write_operator(w, binary.op_token.text, opts)
 	write_space(w)
 	{
 		opts := opts
@@ -215,19 +207,13 @@ print_unary :: proc (unary: ^Expr_Unary, opts: Writer_Options = {}, fd := os.std
 write_unary :: proc (w: io.Writer, unary: ^Expr_Unary, opts: Writer_Options = {})
 {	
 	write_paren(w, .Paren_L, opts)
-	
-	switch unary.op {
-	case .Neg: write_operator_token(w, .Sub, opts)
-	case .Pos: write_operator_token(w, .Add, opts)
-	}
-
+	write_operator(w, unary.op_token.text, opts)
 	write_space(w)
 	{
 		opts := opts
 		opts.parens = true
 		write_expr(w, unary.rhs, opts)
 	}
-
 	write_paren(w, .Paren_R, opts)
 }
 
@@ -238,7 +224,7 @@ print_ident :: proc (ident: ^Expr_Ident, opts: Writer_Options = {}, fd := os.std
 }
 write_ident :: proc (w: io.Writer, ident: ^Expr_Ident, opts: Writer_Options = {})
 {
-	write_string(w, ident.name)
+	write_string(w, ident.token.text)
 }
 
 print_number :: proc (number: ^Expr_Number, opts: Writer_Options = {}, fd := os.stdout)
@@ -248,7 +234,9 @@ print_number :: proc (number: ^Expr_Number, opts: Writer_Options = {}, fd := os.
 }
 write_expr_number :: proc (w: io.Writer, number: ^Expr_Number, opts: Writer_Options = {})
 {
-	write_number(w, number.value, opts)
+	write_highlight(w, .Number, opts)
+	write_string(w, number.token.text)
+	write_highlight(w, .End, opts)
 }
 
 

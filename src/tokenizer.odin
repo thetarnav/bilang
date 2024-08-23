@@ -29,8 +29,7 @@ Token_Kind :: enum u8 {
 
 Token :: struct {
 	kind: Token_Kind,
-	pos : int, // offset to Tokenizer.src
-	len : int,
+	text: string, // view to Tokenizer.src
 }
 
 Tokenizer :: struct {
@@ -57,10 +56,6 @@ tokenizer_make :: #force_inline proc "contextless" (src: string) -> (t: Tokenize
 }
 make_tokenizer :: tokenizer_make
 
-token_string :: #force_inline proc "contextless" (src: string, t: Token) -> (text: string) {
-	return src[t.pos:t.pos + t.len]
-}
-
 next_char :: proc "contextless" (t: ^Tokenizer) -> (char: rune, in_file: bool) #optional_ok #no_bounds_check {
 	if t.pos_read >= len(t.src) {
 		t.char = 0
@@ -77,16 +72,14 @@ next_char :: proc "contextless" (t: ^Tokenizer) -> (char: rune, in_file: bool) #
 
 make_token :: proc "contextless" (t: ^Tokenizer, kind: Token_Kind) -> (token: Token) {
 	token.kind  = kind
-	token.pos   = t.pos_write
-	token.len   = t.pos_read - t.pos_write
+	token.text  = t.src[t.pos_write:t.pos_read]
 	t.pos_write = t.pos_read
 	next_char(t)
 	return
 }
 make_token_go_back :: proc "contextless" (t: ^Tokenizer, kind: Token_Kind) -> (token: Token) {
 	token.kind  = kind
-	token.pos   = t.pos_write
-	token.len   = t.pos_read - t.pos_write - t.char_width
+	token.text  = t.src[t.pos_write:t.pos_read-t.char_width]
 	t.pos_write = t.pos_read - t.char_width
 	return
 }
@@ -173,39 +166,32 @@ next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, in_file: bool
 }
 tokenizer_next :: next_token
 
-// @(require_results)
-// next_token_ignore_comments :: proc(t: ^Tokenizer) -> (token: Token) {
-// 	for {
-// 		token = next_token(t)
-// 		if token.kind != .Comment do return token
-// 	}
-// }
-
 @(require_results)
 next_token_expect :: proc(
 	t: ^Tokenizer,
 	expected: Token_Kind,
 ) -> (token: Token, ok: bool) {
 	token = next_token(t)
-	#partial switch token.kind {
-	// case .Comment:
-	// 	return next_token_expect(t, expected)
-	case expected:
-		return token, true
-	case:
-		return token, false
-	}
+	ok    = token.kind == expected
+	return
+}
+
+token_pos :: proc (src: string, token: Token) -> int
+{
+	src_ptr := uintptr(raw_data(src))
+	tok_ptr := uintptr(raw_data(token.text))
+	tok_pos := int(tok_ptr-src_ptr)
+	assert(0 <= tok_pos && tok_pos < len(src))
+	return tok_pos
 }
 
 /*
 The returned line and column are 0-based.
 */
 @(require_results)
-token_line_col :: proc(
-	src: string,
-	token: Token,
-) -> (line: int, col: int) {
-	for ch in src[:token.pos] {
+token_line_col :: proc (src: string, token: Token) -> (line, col: int)
+{
+	for ch in src[:token_pos(src, token)] {
 		if ch == '\n' {
 			line += 1
 			col   = 0
@@ -218,18 +204,18 @@ token_line_col :: proc(
 
 @(require_results)
 display_token_in_line :: proc (
-	src:   string,
-	token: Token,
+	src: string, token: Token,
 	allocator := context.allocator,
-) -> (text: string, err: mem.Allocator_Error) #optional_allocator_error {
-
-	b := strings.builder_make_len_cap(0, 128, allocator) or_return
+) -> (text: string, err: mem.Allocator_Error) #optional_allocator_error
+{
+	b := strings.builder_make(0, 128, allocator) or_return
 	defer shrink(&b.buf)
 
+	pos       := token_pos(src, token)
 	line, col := token_line_col(src, token)
 
-	start := token.pos - col
-	end   := token.pos + token.len
+	start := pos - col
+	end   := pos + len(token.text)
 
 	// extend end to eol
 	for i := 0; i < 40 && end < len(src); i += 1 {
@@ -246,7 +232,7 @@ display_token_in_line :: proc (
 	strings.write_string(&b, ".")
 	strings.write_string(&b, reflect.enum_string(token.kind))
 	strings.write_string(&b, " \"")
-	strings.write_string(&b, token_string(src, token))
+	strings.write_string(&b, token.text)
 	strings.write_string(&b, "\" at ")
 	strings.write_int   (&b, line+1)
 	strings.write_string(&b, ":")
@@ -257,7 +243,7 @@ display_token_in_line :: proc (
 	for _ in 0..<col {
 		strings.write_rune(&b, ' ')
 	}
-	for _ in 0..<token.len {
+	for _ in token.text {
 		strings.write_rune(&b, '^')
 	}
 	strings.write_rune(&b, '\n')

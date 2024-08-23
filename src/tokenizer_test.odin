@@ -187,7 +187,7 @@ test_tokenizer_cases :: proc(t: ^testing.T)
 
 		for token, i in tokens {
 			expected := test_case.expected[i]
-			actual   := token_string(test_case.src, token)
+			actual   := token.text
 			if !(actual == expected.text && token.kind == expected.kind) {
 				log.errorf(
 					"\n\e[0;32m%q\e[0m:\e[0;31m\nexpected tokens[%d] to be %s `%s`, got %s `%s`\n\e[0m%s",
