@@ -200,6 +200,16 @@ newton_raphson :: proc (
 	return x, false
 }
 
+// TODO: should give two results
+solve_quadratic_polynomial :: proc (a, b, c: f64) -> (root: f64, found: bool)
+{
+	/* 
+	x = (-b +/- (b^2 - 4ac)^(1/2)) / 2a
+	*/
+	root = (-b + math.sqrt(b*b - 4*a*c)) / (2*a)
+	return root, !math.is_nan(root)
+}
+
 find_polynomial_root :: proc (p: Polynomial) -> (root: f64, found: bool) #no_bounds_check
 {
 	if len(p) == 0 {
@@ -210,15 +220,16 @@ find_polynomial_root :: proc (p: Polynomial) -> (root: f64, found: bool) #no_bou
 		return 0, true
 	}
 
+	if len(p) == 3 {
+		return solve_quadratic_polynomial(p[2], p[1], p[0])
+	}
+
 	a, b := -p[0], p[0]
 	if a > b {
 		a, b = b, a
 	}
+
 	root, found = bisection(a, b, p)
-
-	if !found {
-		root, found = newton_raphson(root, p)
-	}
-
-	return
+	if found do return
+	return newton_raphson(root, p)
 }

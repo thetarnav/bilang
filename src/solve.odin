@@ -644,85 +644,6 @@ constraints_from_decls :: proc (decls: []Decl, allocator := context.allocator) -
 	}
 }
 
-solve :: proc (constrs: []Constraint, allocator := context.allocator)
-{
-	context.allocator = allocator
-
-	/*
-	Display additional information about current state of constraints when debugging
-	*/
-	when ODIN_DEBUG {
-		Logger_Data :: struct {
-			logger_proc: runtime.Logger_Proc,
-			logger_data: rawptr,
-			constrs:     []Constraint,
-		}
-		logger_data := Logger_Data{
-			logger_proc = context.logger.procedure,
-			logger_data = context.logger.data,
-			constrs     = constrs,
-		}
-		context.logger.data = &logger_data
-		context.logger.procedure = proc (
-			data_raw: rawptr,
-			level:    runtime.Logger_Level,
-			text:     string,
-			options:  runtime.Logger_Options,
-			location: runtime.Source_Code_Location,
-		) {
-			data   := (^Logger_Data)(data_raw)
-			output := contraints_to_string(data.constrs[:], {highlight=true}, context.temp_allocator)
-			text   := strings.concatenate({text, "\n", output}, context.temp_allocator)
-			data.logger_proc(data.logger_data, level, text, options, location)
-		}
-	}
-
-	// scratch_allocator := mem.Scratch_Allocator{}
-	// mem.scratch_allocator_init(&scratch_allocator, mem.Megabyte, context.temp_allocator)
-	// context.temp_allocator = mem.scratch_allocator(&scratch_allocator)
-	// defer mem.scratch_allocator_destroy(&scratch_allocator)
-
-	solve_loop: for {
-		// free_all(context.temp_allocator)
-
-		updated: bool
-
-		for _, constr_i in constrs {
-			fold_constraint(constr_i, constrs[:], &updated)
-		}
-
-		if updated do continue
-
-		for &constr, constr_i in constrs {
-			
-			if is_constraint_solved(constr) {
-				// try substituting solved vars
-				var := constr.lhs.var
-
-				for &constr2, constr2_i in constrs {
-					if constr_i == constr2_i || constr.var.var == constr2.var.var {
-						continue
-					}
-
-					lhs, lhs_ok := try_substituting_var(constr2.lhs, var, constr.rhs)
-					rhs, rhs_ok := try_substituting_var(constr2.rhs, var, constr.rhs)
-					constr2.lhs, constr2.rhs = lhs, rhs
-					updated ||= lhs_ok || rhs_ok
-				}
-			} else {
-				// try approximation
-				try_finding_polynomial_solution(&constr, &updated)
-			}
-
-			if updated {
-				continue solve_loop
-			}
-		}
-		
-		break
-	}
-}
-
 fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 {
 	#no_bounds_check constr := &constrs[constr_i]
@@ -826,6 +747,85 @@ fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 	}
 }
 
+solve :: proc (constrs: []Constraint, allocator := context.allocator)
+{
+	context.allocator = allocator
+
+	/*
+	Display additional information about current state of constraints when debugging
+	*/
+	when ODIN_DEBUG {
+		Logger_Data :: struct {
+			logger_proc: runtime.Logger_Proc,
+			logger_data: rawptr,
+			constrs:     []Constraint,
+		}
+		logger_data := Logger_Data{
+			logger_proc = context.logger.procedure,
+			logger_data = context.logger.data,
+			constrs     = constrs,
+		}
+		context.logger.data = &logger_data
+		context.logger.procedure = proc (
+			data_raw: rawptr,
+			level:    runtime.Logger_Level,
+			text:     string,
+			options:  runtime.Logger_Options,
+			location: runtime.Source_Code_Location,
+		) {
+			data   := (^Logger_Data)(data_raw)
+			output := contraints_to_string(data.constrs[:], {highlight=true}, context.temp_allocator)
+			text   := strings.concatenate({text, "\n", output}, context.temp_allocator)
+			data.logger_proc(data.logger_data, level, text, options, location)
+		}
+	}
+
+	// scratch_allocator := mem.Scratch_Allocator{}
+	// mem.scratch_allocator_init(&scratch_allocator, mem.Megabyte, context.temp_allocator)
+	// context.temp_allocator = mem.scratch_allocator(&scratch_allocator)
+	// defer mem.scratch_allocator_destroy(&scratch_allocator)
+
+	solve_loop: for {
+		// free_all(context.temp_allocator)
+
+		updated: bool
+
+		for _, constr_i in constrs {
+			fold_constraint(constr_i, constrs[:], &updated)
+		}
+
+		if updated do continue
+
+		for &constr, constr_i in constrs {
+			
+			if is_constraint_solved(constr) {
+				// try substituting solved vars
+				var := constr.lhs.var
+
+				for &constr2, constr2_i in constrs {
+					if constr_i == constr2_i || constr.var.var == constr2.var.var {
+						continue
+					}
+
+					lhs, lhs_ok := try_substituting_var(constr2.lhs, var, constr.rhs)
+					rhs, rhs_ok := try_substituting_var(constr2.rhs, var, constr.rhs)
+					constr2.lhs, constr2.rhs = lhs, rhs
+					updated ||= lhs_ok || rhs_ok
+				}
+			} else {
+				// try approximation
+				try_finding_polynomial_solution(&constr, &updated)
+			}
+
+			if updated {
+				continue solve_loop
+			}
+		}
+		
+		break
+	}
+}
+
 try_finding_polynomial_solution :: proc (constr: ^Constraint, updated: ^bool)
 {
 	context.allocator = context.temp_allocator
@@ -843,9 +843,7 @@ try_finding_polynomial_solution :: proc (constr: ^Constraint, updated: ^bool)
 	fold_atom(&atom, &_dummy_updated)
 
 	poly, ok := polynomial_from_atom(atom^, constr.var.var)
-	if !ok {
-		return
-	}
+	if !ok do return
 
 	root, found := find_polynomial_root(poly)
 	if found {
