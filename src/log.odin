@@ -17,7 +17,7 @@ log_debugf :: #force_inline proc (fmt_str: string, args: ..any, location := #cal
 @(disabled=!ODIN_DEBUG)
 log_debug_update :: proc (constrs: []Constraint, title := "updated", location := #caller_location)
 {
-	output, err := contraints_to_string(constrs)
+	output, err := constraints_to_string(constrs)
 
 	if err != nil {
 		log_debugf("%s: failed to print constraints: %v", title, err, location=location)

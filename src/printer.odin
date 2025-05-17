@@ -253,7 +253,7 @@ print_contraints :: proc (constrs: []Constraint, opts: Writer_Options = {}, fd :
 }
 
 @require_results
-contraints_to_string :: proc (
+constraints_to_string :: proc (
 	constrs: []Constraint,
 	opts   : Writer_Options = {},
 	allocator := context.allocator,

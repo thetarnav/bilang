@@ -55,7 +55,7 @@ main :: proc () {} // entry point is required to initialize global vars
 	constrs := bilang.constraints_from_decls(decls)
 	bilang.solve(constrs)
 
-	constrs_str, alloc_err := bilang.contraints_to_string(constrs)
+	constrs_str, alloc_err := bilang.constraints_to_string(constrs)
 
 	if alloc_err != nil {
 		output("Error: failed to allocate memory for output")

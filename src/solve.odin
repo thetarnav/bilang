@@ -245,7 +245,7 @@ atom_mul_if_possible :: proc (a, b: ^Atom) -> (product: ^Atom, ok: bool)
 	visit_b :: proc (a, b: ^Atom) -> (res: ^Atom, ok: bool)
 	{
 		// x^2 * x  ->  x^3
-		// ? should other exponents besided num be allowed?
+		// ? should other exponents beside num be allowed?
 		if a.kind == .Pow && a.rhs.kind == .Num && atom_equals(a.lhs, b) {
 			return atom_binary(.Pow,
 				a.lhs,
@@ -560,7 +560,7 @@ is_constraint_solved :: proc (constr: Constraint) -> bool {
 }
 
 // Compares vars by value if they do not contradict
-// constraint_contadicts :: proc (a, b: Constraint) -> bool
+// constraint_contradicts :: proc (a, b: Constraint) -> bool
 // {
 // 	a_var, is_a_lhs_var := a.lhs.(Atom_Var)
 // 	b_var, is_b_lhs_var := b.lhs.(Atom_Var)
@@ -777,7 +777,7 @@ solve :: proc (constrs: []Constraint, allocator := context.allocator)
 			location: runtime.Source_Code_Location,
 		) {
 			data   := (^Logger_Data)(data_raw)
-			output := contraints_to_string(data.constrs[:], {highlight=true}, context.temp_allocator)
+			output := constraints_to_string(data.constrs[:], {highlight=true}, context.temp_allocator)
 			text   := strings.concatenate({text, "\n", output}, context.temp_allocator)
 			data.logger_proc(data.logger_data, level, text, options, location)
 		}
