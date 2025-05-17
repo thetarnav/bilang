@@ -1,13 +1,9 @@
-# Ignore all extensionless files
-*
-!*.*
-!*/
-
 # generated files
 _*
 *.wasm
-*.o
+*.[oa]
 *.bin
+*~
 
 # Vscode config
 .vscode/settings.json
