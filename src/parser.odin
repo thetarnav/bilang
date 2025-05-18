@@ -74,15 +74,62 @@ Parser :: struct {
 	allocator: mem.Allocator,
 }
 
+@require_results
 token_is_binary :: proc (token: Token) -> bool {
 	return tokens_binary[token.kind]
 }
+@require_results
 token_is_unary :: proc (token: Token) -> bool {
 	return tokens_unary[token.kind]
 }
-
+@require_results
 token_precedence :: proc (token: Token) -> int {
 	return precedence_table[token.kind]
+}
+
+@require_results
+expr_ident_new :: proc (token: Token, allocator := context.allocator, loc := #caller_location) ->
+	(ident: ^Expr_Ident, err: Parse_Error)
+{
+	assert(token.kind == .Ident, loc=loc)
+
+	ident = new(Expr_Ident, allocator, loc=loc) or_return
+	ident.token = token
+
+	return
+}
+@require_results
+expr_number_new :: proc (token: Token, allocator := context.allocator, loc := #caller_location) ->
+	(number: ^Expr_Number, err: Parse_Error)
+{
+	assert(token.kind == .Num, loc=loc)
+
+	number = new(Expr_Number, allocator, loc=loc) or_return
+	number.token = token
+
+	return
+}
+@require_results
+expr_unary_new :: proc (op: Token, rhs: Expr, allocator := context.allocator, loc := #caller_location) ->
+	(unary: ^Expr_Unary, err: Parse_Error)
+{
+	assert(token_is_unary(op), loc=loc)
+
+	unary = new(Expr_Unary, allocator, loc=loc) or_return
+	unary^ = {op, rhs}
+
+	return
+}
+@require_results
+expr_binary_new :: proc (op: Token, lhs, rhs: Expr, allocator: mem.Allocator, loc := #caller_location) ->
+	(bin: ^Expr_Binary, err: Parse_Error)
+{
+	assert(token_is_binary(op), loc=loc)
+
+	bin = new(Expr_Binary, allocator, loc=loc) or_return
+	bin^ = {op, lhs, rhs}
+
+	return
 }
 
 parser_next_token :: proc(p: ^Parser)
@@ -174,6 +221,7 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) {
 	return parse_expr_bp(p, 1)
 }
 
+@(require_results)
 parse_expr_bp :: proc (p: ^Parser, min_bp: int) -> (expr: Expr, err: Parse_Error) #no_bounds_check
 {
 	/*
@@ -198,11 +246,7 @@ parse_expr_bp :: proc (p: ^Parser, min_bp: int) -> (expr: Expr, err: Parse_Error
 
 		rhs := parse_expr_bp(p, rbp) or_return
 
-		bin := new(Expr_Binary, p.allocator) or_return
-		bin.op_token = op
-		bin.lhs      = expr
-		bin.rhs      = rhs
-		expr = bin
+		expr = expr_binary_new(op, expr, rhs, p.allocator) or_return
 	}
 
 	return
@@ -241,40 +285,25 @@ parse_paren :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error)
 @(require_results)
 parse_unary :: proc (p: ^Parser) -> (unary: ^Expr_Unary, err: Parse_Error)
 {
-	assert(tokens_unary[p.token.kind])
-
-	unary = new(Expr_Unary, p.allocator) or_return
-	unary.op_token = p.token
-
+	op := p.token
 	parser_next_token(p)
-	unary.rhs = parse_expr_atom(p) or_return
-
-	return
+	rhs := parse_expr_atom(p) or_return
+	return expr_unary_new(op, rhs, p.allocator)
 }
 
 @(require_results)
 parse_ident :: proc (p: ^Parser) -> (ident: ^Expr_Ident, err: Parse_Error)
 {
-	assert(p.token.kind == .Ident)
-
-	ident = new(Expr_Ident, p.allocator) or_return
-	ident.token = p.token
-
+	ident, err = expr_ident_new(p.token, p.allocator)
 	parser_next_token(p)
-
 	return
 }
 
 @(require_results)
 parse_number :: proc (p: ^Parser) -> (number: ^Expr_Number, err: Parse_Error)
 {
-	assert(p.token.kind == .Num)
-
-	number = new(Expr_Number, p.allocator) or_return
-	number.token = p.token
-
+	number, err = expr_number_new(p.token, p.allocator)
 	parser_next_token(p)
-
 	return
 }
 
