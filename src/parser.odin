@@ -81,6 +81,10 @@ token_is_unary :: proc (token: Token) -> bool {
 	return tokens_unary[token.kind]
 }
 
+token_precedence :: proc (token: Token) -> int {
+	return precedence_table[token.kind]
+}
+
 parser_next_token :: proc(p: ^Parser)
 {
 	p.token = next_token(&p.t)
@@ -166,7 +170,11 @@ parse_decl :: proc (p: ^Parser) -> (decl: Decl, err: Parse_Error)
 }
 
 @(require_results)
-parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) #no_bounds_check
+parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) {
+	return parse_expr_bp(p, 1)
+}
+
+parse_expr_bp :: proc (p: ^Parser, min_bp: int) -> (expr: Expr, err: Parse_Error) #no_bounds_check
 {
 	/*
 	-a * b + c
@@ -174,66 +182,27 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) #no_bounds_che
 
 	expr = parse_expr_atom(p) or_return
 
-	if !token_is_binary(p.token) do return
-
-	bin := new(Expr_Binary, p.allocator) or_return
-	bin.op_token = p.token
-	bin.lhs      = expr
-
-	parser_next_token(p)
-	bin.rhs = parse_expr_atom(p) or_return
-
-	bin_expr := bin
-	bin_last := bin
-	expr      = bin
-
 	for {
-		if !token_is_binary(p.token) do return
+		op := p.token
+		token_is_binary(op) or_break
 
-		bin = new(Expr_Binary, p.allocator) or_return
-		bin.op_token = p.token
+		lbp := token_precedence(op)
+		if lbp < min_bp do return
+
+		rbp := lbp
+		if op.kind != .Pow {
+			rbp += 1 // Right-associative for Pow
+		}
 
 		parser_next_token(p)
-		bin.rhs = parse_expr_atom(p) or_return
 
-		if precedence_table[bin.op_token.kind] <= precedence_table[bin_last.op_token.kind] {
-			if precedence_table[bin.op_token.kind] <= precedence_table[bin_expr.op_token.kind] &&
-			   bin.op_token.kind != .Pow /* exponentiation is right-associative */ {
-				/*     +
-				|     / \
-				|    *   c
-				|   / \
-				|  a   b
-				*/
-				bin.lhs  = bin_expr
-				expr     = bin
-				bin_expr = bin
-			} else {
-				/* (a + b^c * d)   +  <- bin_expr
-				|                 / \   
-				|                a   *  
-				|                   / \ 
-				|     bin_last ->  ^   d
-				|                 / \   
-				|                b   c
-				*/   
-				bin.lhs      = bin_expr.rhs
-				bin_expr.rhs = bin
-			}
-		} else {
-			/* (a + b * c^d)   +  <- bin_expr
-			|                 / \      
-			|                a   *  <- bin_last    
-			|                   / \    
-			|                  b   ^   
-			|                     / \  
-			|                    c   d
-			*/                                                   
-			bin.lhs      = bin_last.rhs
-			bin_last.rhs = bin
-		}
-		
-		bin_last = bin
+		rhs := parse_expr_bp(p, rbp) or_return
+
+		bin := new(Expr_Binary, p.allocator) or_return
+		bin.op_token = op
+		bin.lhs      = expr
+		bin.rhs      = rhs
+		expr = bin
 	}
 
 	return
