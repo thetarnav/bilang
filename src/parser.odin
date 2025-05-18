@@ -74,6 +74,13 @@ Parser :: struct {
 	allocator: mem.Allocator,
 }
 
+token_is_binary :: proc (token: Token) -> bool {
+	return tokens_binary[token.kind]
+}
+token_is_unary :: proc (token: Token) -> bool {
+	return tokens_unary[token.kind]
+}
+
 parser_next_token :: proc(p: ^Parser)
 {
 	p.token = next_token(&p.t)
@@ -167,8 +174,7 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) #no_bounds_che
 
 	expr = parse_expr_atom(p) or_return
 
-	is_bin_op := tokens_binary[p.token.kind]
-	if !is_bin_op do return
+	if !token_is_binary(p.token) do return
 
 	bin := new(Expr_Binary, p.allocator) or_return
 	bin.op_token = p.token
@@ -182,8 +188,7 @@ parse_expr :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error) #no_bounds_che
 	expr      = bin
 
 	for {
-		is_bin_op = tokens_binary[p.token.kind]
-		if !is_bin_op do return
+		if !token_is_binary(p.token) do return
 
 		bin = new(Expr_Binary, p.allocator) or_return
 		bin.op_token = p.token
