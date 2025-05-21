@@ -7,7 +7,19 @@
             "name": "Debug Run ./bilang",
             "program": "${workspaceFolder}/src.bin",
             "args": [],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
         },
-    ]
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Test",
+            "program": "/bin/bash",
+            "args": [
+                "${workspaceFolder}/cmd.sh",
+                "test",
+                "-debug",
+            ],
+            "cwd": "${workspaceFolder}",
+        },
+    ],
 }
