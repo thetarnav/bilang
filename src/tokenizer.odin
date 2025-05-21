@@ -139,10 +139,60 @@ next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, in_file: bool
 					switch next_char(t) {
 					case '0'..='9':
 						// continue
+					case 'e', 'E':
+						// exponent (123.456e+10)
+						switch next_char(t) {
+						case '+', '-':
+							switch next_char(t) {
+							case '0'..='9':
+								// continue
+							case:
+								return make_token_go_back(t, .Invalid), true // invalid like 1e+ or 1e-
+							}
+						case '0'..='9':
+							// continue
+						case:
+							return make_token_go_back(t, .Invalid), true // invalid like 1e or 1.2e
+						}
+						for {
+							switch next_char(t) {
+							case '0'..='9':
+								// continue
+							case 'a'..='z', 'A'..='Z', '_':
+								return make_token_go_back(t, .Invalid), true
+							case:
+								return make_token_go_back(t, .Num), true // float with exponent
+							}
+						}
 					case 'a'..='z', 'A'..='Z', '_':
 						return make_token_go_back(t, .Invalid), true
 					case:
 						return make_token_go_back(t, .Num), true // float
+					}
+				}
+			case 'e', 'E':
+				// exponent (123e+10)
+				switch next_char(t) {
+				case '+', '-':
+					switch next_char(t) {
+					case '0'..='9':
+						// continue
+					case:
+						return make_token_go_back(t, .Invalid), true // invalid like 1e+ or 1e-
+					}
+				case '0'..='9':
+					// continue
+				case:
+					return make_token_go_back(t, .Invalid), true // invalid like 1e
+				}
+				for {
+					switch next_char(t) {
+					case '0'..='9':
+						// continue
+					case 'a'..='z', 'A'..='Z', '_':
+						return make_token_go_back(t, .Invalid), true
+					case:
+						return make_token_go_back(t, .Num), true // int with exponent
 					}
 				}
 			case 'a'..='z', 'A'..='Z', '_':
