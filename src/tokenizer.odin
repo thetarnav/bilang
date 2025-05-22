@@ -22,7 +22,8 @@ Token_Kind :: enum u8 {
 	Div,           // /
 	Pow,           // ^
 	// Scalars
-	Num,           // 123, 123.456, 0.123, 0
+	Int,           // 123
+	Float,         // 123.456, 0.123, 0, 1e2, 1.2e3
 	// Identifiers
 	Ident,         // abc_69
 }
@@ -161,13 +162,13 @@ next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, in_file: bool
 							case 'a'..='z', 'A'..='Z', '_':
 								return make_token_go_back(t, .Invalid), true
 							case:
-								return make_token_go_back(t, .Num), true // float with exponent
+								return make_token_go_back(t, .Float), true // float with exponent
 							}
 						}
 					case 'a'..='z', 'A'..='Z', '_':
 						return make_token_go_back(t, .Invalid), true
 					case:
-						return make_token_go_back(t, .Num), true // float
+						return make_token_go_back(t, .Float), true // float
 					}
 				}
 			case 'e', 'E':
@@ -192,13 +193,13 @@ next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, in_file: bool
 					case 'a'..='z', 'A'..='Z', '_':
 						return make_token_go_back(t, .Invalid), true
 					case:
-						return make_token_go_back(t, .Num), true // int with exponent
+						return make_token_go_back(t, .Float), true // int with exponent, treated as float
 					}
 				}
 			case 'a'..='z', 'A'..='Z', '_':
 				return make_token_go_back(t, .Invalid), true
 			case:
-				return make_token_go_back(t, .Num), true // int
+				return make_token_go_back(t, .Int), true // int
 			}
 		}
 	// Identifiers
