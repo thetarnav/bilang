@@ -1,0 +1,25 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+        {
+            "label": "build-test",
+            "type": "shell",
+            "command": "odin",
+            "args": [
+                "build",
+                "src",
+                "-error-pos-style:unix",
+                "-build-mode:test",
+                "-debug",
+                "-out:test.bin"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared",
+            },
+        },
+    ],
+}

@@ -4,22 +4,11 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug Run ./bilang",
-            "program": "${workspaceFolder}/src.bin",
+            "name": "Debug Test",
+            "program": "${workspaceFolder}/test.bin",
             "args": [],
             "cwd": "${workspaceFolder}",
+            "preLaunchTask": "build-test",
         },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug Test",
-            "program": "/bin/bash",
-            "args": [
-                "${workspaceFolder}/cmd.sh",
-                "test",
-                "-debug",
-            ],
-            "cwd": "${workspaceFolder}",
-        },
-    ],
+    ],   
 }

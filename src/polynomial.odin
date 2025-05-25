@@ -36,7 +36,7 @@ polynomial_from_atom :: proc (
 
 	cloned, err := slice.clone(coeffs[:s.len], allocator)
 	if err != nil {
-		log.error("Allocation error when creaging polynomial:", err)
+		log.error("Allocation error when creating polynomial:", err)
 		return
 	}
 
@@ -52,8 +52,10 @@ polynomial_from_atom :: proc (
 		case .Add:
 			return visit_addend(a.lhs^, s) && visit_addend(a.rhs^, s)
 		// 123
-		case .Num:
-			idx, coeff = 0, a.num
+		case .Float:
+			idx, coeff = 0, a.float
+		case .Int:
+			idx, coeff = 0, f64(a.int)
 		// x
 		case .Var:
 		 	if a.var == s.var {
@@ -67,13 +69,15 @@ polynomial_from_atom :: proc (
 		case .Mul:
 			b: ^Atom
 			switch {
-			case a.lhs.kind == .Num: coeff, b = a.lhs.num, a.rhs
-			case a.rhs.kind == .Num: coeff, b = a.rhs.num, a.lhs
+			case a.lhs.kind == .Float: coeff, b = a.lhs.float, a.rhs
+			case a.rhs.kind == .Float: coeff, b = a.rhs.float, a.lhs
+			case a.lhs.kind == .Int:   coeff, b = f64(a.lhs.int), a.rhs
+			case a.rhs.kind == .Int:   coeff, b = f64(a.rhs.int), a.lhs
 			case: return
 			}
 
 			switch {
-			case is_var(b^, s.var): idx = 1
+			case atom_val_equals(b^, s.var): idx = 1
 			case b.kind == .Pow   : idx = get_index_from_pow(b^, s^)
 			}
 		}
@@ -90,8 +94,13 @@ polynomial_from_atom :: proc (
 	}
 
 	get_index_from_pow :: proc (a: Atom, s: State) -> int {
-		if is_var(a.lhs^, s.var) && a.rhs.kind == .Num && is_int(a.rhs.num) {
-			return int(a.rhs.num)
+		if atom_val_equals(a.lhs^, s.var) {
+			if a.rhs.kind == .Float && is_int(a.rhs.float) {
+				return int(a.rhs.float)
+			}
+			if a.rhs.kind == .Int {
+				return a.rhs.int
+			}
 		}
 		return MAX_POLYNOMIAL_LEN // out-of-bounds
 	}
@@ -165,7 +174,7 @@ bisection :: proc (a, b: f64, p: Polynomial) -> (x: f64, found: bool) {
 Newton-Raphson method to guess root of polynomial
 Uses float accuracy instead of tolerance param
 
-`initial_guess` - initial quess for the root,
+`initial_guess` - initial guess for the root,
 `p`             - polynomial `p(x)`,
 */
 @require_results

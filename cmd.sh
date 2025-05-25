@@ -1,6 +1,16 @@
 #!/bin/bash
 
 case "$1" in
+	build_test)
+		echo "Building test"
+		shift
+		odin build src \
+			-error-pos-style:unix \
+			-debug \
+			-build-mode:test \
+			-out:test.bin \
+			"$@"
+		;;
 	test)
 		echo "Running test"
 		shift
@@ -9,6 +19,7 @@ case "$1" in
 			-error-pos-style:unix \
 			-define:ODIN_TEST_LOG_LEVEL=warning \
 			-define:ODIN_TEST_FANCY=false \
+			-out:test.bin \
 			"$@"
 		;;
 	build_wasm)

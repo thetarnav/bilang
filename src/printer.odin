@@ -41,7 +41,7 @@ write_newline :: proc (w: io.Writer) {
 }
 
 @(private)
-write_f64 :: proc(w: io.Writer, val: f64, n_written: ^int = nil) -> (n: int, err: io.Error) {
+_write_f64 :: proc(w: io.Writer, val: f64, n_written: ^int = nil) -> (n: int, err: io.Error) {
 	buf: [386]byte
 
 	str := strconv.append_float(buf[1:], val, 'g', 2*size_of(val), 8*size_of(val))
@@ -58,6 +58,12 @@ write_f64 :: proc(w: io.Writer, val: f64, n_written: ^int = nil) -> (n: int, err
 	}
 
 	return io.write_string(w, string(s), n_written)
+}
+@private
+_write_int :: proc(w: io.Writer, val: i64, n_written: ^int = nil) -> (n: int, err: io.Error) {
+	buf: [32]byte
+	str := strconv.append_int(buf[:], val, 10)
+	return io.write_string(w, string(str), n_written)
 }
 
 Highlight_Kind :: enum {
@@ -77,10 +83,16 @@ write_highlight :: proc (w: io.Writer, kind: Highlight_Kind, opts: Writer_Option
 	}
 }
 
-write_number :: proc (w: io.Writer, n: f64, opts: Writer_Options = {})
+write_float :: proc (w: io.Writer, n: f64, opts: Writer_Options = {})
 {
 	write_highlight(w, .Number, opts)
-	write_f64(w, n)
+	_write_f64(w, n)
+	write_highlight(w, .End, opts)
+}
+write_int :: proc (w: io.Writer, n: int, opts: Writer_Options = {})
+{
+	write_highlight(w, .Number, opts)
+	_write_int(w, i64(n))
 	write_highlight(w, .End, opts)
 }
 
@@ -167,8 +179,7 @@ write_expr :: proc (w: io.Writer, expr: Expr, opts: Writer_Options = {})
 	switch v in expr {
 	case ^Expr_Binary: write_binary(w, v, opts)
 	case ^Expr_Unary:  write_unary (w, v, opts)
-	case ^Expr_Ident:  write_ident (w, v, opts)
-	case ^Expr_Number: write_expr_number(w, v, opts)
+	case ^Expr_Single: write_single(w, v, opts)
 	}
 	return
 }
@@ -217,26 +228,23 @@ write_unary :: proc (w: io.Writer, unary: ^Expr_Unary, opts: Writer_Options = {}
 	write_paren(w, .Paren_R, opts)
 }
 
-print_ident :: proc (ident: ^Expr_Ident, opts: Writer_Options = {}, fd := os.stdout)
+print_single :: proc (single: ^Expr_Single, opts: Writer_Options = {}, fd := os.stdout)
 {
 	w := _scope_handle_writer(fd)
-	write_ident(w^, ident, opts)
+	write_single(w^, single, opts)
 }
-write_ident :: proc (w: io.Writer, ident: ^Expr_Ident, opts: Writer_Options = {})
+write_single :: proc (w: io.Writer, single: ^Expr_Single, opts: Writer_Options = {})
 {
-	write_string(w, ident.token.text)
-}
-
-print_number :: proc (number: ^Expr_Number, opts: Writer_Options = {}, fd := os.stdout)
-{
-	w := _scope_handle_writer(fd)
-	write_expr_number(w^, number, opts)
-}
-write_expr_number :: proc (w: io.Writer, number: ^Expr_Number, opts: Writer_Options = {})
-{
-	write_highlight(w, .Number, opts)
-	write_string(w, number.token.text)
-	write_highlight(w, .End, opts)
+	#partial switch single.token.kind {
+	case .Float, .Int:
+		write_highlight(w, .Number, opts)
+		write_string(w, single.token.text)
+		write_highlight(w, .End, opts)
+	case .Ident:
+		write_string(w, single.token.text)
+	case:
+		unreachable()
+	}
 }
 
 
@@ -249,7 +257,7 @@ CONSTRAINTS
 
 print_contraints :: proc (constrs: []Constraint, opts: Writer_Options = {}, fd := os.stdout) {
 	w := _scope_handle_writer(fd)
-	write_contraints(w^, constrs, opts)
+	write_constraints(w^, constrs, opts)
 }
 
 @require_results
@@ -262,11 +270,11 @@ constraints_to_string :: proc (
 	b := strings.builder_make_len_cap(0, 1024, allocator) or_return
 	w := strings.to_writer(&b)
 
-	write_contraints(w, constrs, opts)
+	write_constraints(w, constrs, opts)
 
 	return strings.to_string(b), nil
 }
-write_contraints :: proc (w: io.Writer, constrs: []Constraint, opts: Writer_Options = {})
+write_constraints :: proc (w: io.Writer, constrs: []Constraint, opts: Writer_Options = {})
 {
 	for constr in constrs {
 		write_string(w, constr.var.var)
@@ -290,8 +298,10 @@ print_atom :: proc (atom: Atom, opts: Writer_Options = {}, fd := os.stdout)
 write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 {
 	switch atom.kind {
-	case .Num:
-		write_number(w, atom.num, opts)
+	case .Int:
+		write_int(w, atom.int, opts)
+	case .Float:
+		write_float(w, atom.float, opts)
 	case .Var:
 		write_string(w, atom.var)
 	case .Add, .Mul, .Div, .Pow:
@@ -299,9 +309,9 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 		// x*-1  ->  -x
 		display_neg: if atom.kind == .Mul {
 			val: ^Atom
-			if is_num(atom.lhs^, -1) {
+			if atom_val_equals(atom.lhs^, -1) {
 				val = atom.rhs
-			} else if is_num(atom.rhs^, -1) {
+			} else if atom_val_equals(atom.rhs^, -1) {
 				val = atom.lhs
 			} else {
 				break display_neg
@@ -320,8 +330,8 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 		case .Pow: op = .Pow
 		}
 		
-		is_nested := (atom.lhs.kind != atom.kind && is_binary(atom.lhs^)) ||
-		             (atom.rhs.kind != atom.kind && is_binary(atom.rhs^))
+		is_nested := (atom.lhs.kind != atom.kind && atom_is_binary(atom.lhs^)) ||
+		             (atom.rhs.kind != atom.kind && atom_is_binary(atom.rhs^))
 
 		if is_nested do write_paren(w, .Paren_L, opts)
 		{

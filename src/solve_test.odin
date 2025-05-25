@@ -13,33 +13,33 @@ import test "core:testing"
 		solve: string,
 	}{
 		{
-			"3 - x + 2 = 3",
+			"3.0 - x + 2.0 = 3.0",
 
 			"x: x = 2\n",
 		},
 		{
-			"3 / x = 1",
+			"3.0 / x = 1.0",
 
 			"x: x = 3\n",
 		},
 		{
-			"x / 3 = 1",
+			"x / 3.0 = 1.0",
 
 			"x: x = 3\n",
 		},
 		{
-			"2 * x = 6",
+			"2.0 * x = 6.0",
 
 			"x: x = 3\n",
 		},
 		{
-			"6 = x * 2",
+			"6.0 = x * 2.0",
 
 			"x: x = 3\n",
 		},
 		{
 `x = y
-y = 1`,
+y = 1.0`,
 
 `x: x = 1
 y: y = 1
@@ -47,8 +47,8 @@ y: y = 1
 `,
 		},
 		{
-			"a + b = 10\n"+
-			"a = -4 + 2",
+			"a + b = 10.0\n"+
+			"a = -4.0 + 2.0",
 
 			"a: a = -2\n"+
 			"b: b = 12\n"+
@@ -56,9 +56,9 @@ y: y = 1
 		},
 		{
 			"y = a * x + b\n"+
-			"a = 1 / 2\n"+
-			"b = -4\n"+
-			"y = 2\n",
+			"a = 1.0 / 2.0\n"+
+			"b = -4.0\n"+
+			"y = 2.0\n",
 
 			"y: y = 2\n"+
 			"a: a = 0.5\n"+
@@ -69,21 +69,21 @@ y: y = 1
 			"y: y = 2\n",
 		},
 		{
-			"(n * 2 + 10) / (n + 1) = 3",
+			"(n * 2.0 + 10.0) / (n + 1.0) = 3.0",
 
 			"n: n = 7\n",
 		},
 		{
-			"(n * 2 + 10) / (n + 1) = 2 * x\n"+
-			"x * 2 = 3\n",
+			"(n * 2.0 + 10.0) / (n + 1.0) = 2.0 * x\n"+
+			"x * 2.0 = 3.0\n",
 
 			"n: n = 7\n"+
 			"x: x = 1.5\n"+
 			"x: x = 1.5\n",
 		},
 		{
-`(4*n + 10) / (n + 1) = 3*x
-2*x = 6`,
+`(4.0*n + 10.0) / (n + 1.0) = 3.0*x
+2.0*x = 6.0`,
 
 `n: n = 0.2
 x: x = 3
@@ -91,7 +91,7 @@ x: x = 3
 `,
 		},
 		{
-			"(4*n + 10) / (n + 2) = 2*x + 1/2\n",
+			"(4.0*n + 10.0) / (n + 2.0) = 2.0*x + 1.0/2.0\n",
 
 			"n: n = (4*x + -9) / (3.5 + -2*x)\n"+
 			"x: x = (n*-3.5 + -9) / (-2*n + -4)\n",
@@ -121,34 +121,34 @@ c: c = -a*x + -b*y
 `
 		},
 		{
-			"2*x + 4*y = 0\n",
+			"2.0*x + 4.0*y = 0.0\n",
 
 			"x: x = -2*y\n"+
 			"y: y = -0.5*x\n"
 		},
 		{
-			"x * x = 4\n",
+			"x * x = 4.0\n",
 
 			"x: x = 2\n",
 		},
 		{
-			"x * x = -1\n",
+			"x * x = -1.0\n",
 
 			"x: x = NaN\n",
 			// TODO: fail because x is not real
 		},
 		{
-			"(x^2 + 12) * (x + 1) = 4",
+			"(x^2.0 + 12.0) * (x + 1.0) = 4.0",
 
 			"x: x^3 + x^2 + 12*x = -8\n",
 		},
 		{
-			"x^3 = 1 + x",
+			"x^3.0 = 1.0 + x",
 
 			"x: x = 1.324717957244746\n"
 		},
 		{
-			"3 * x^2 = 6",
+			"3.0 * x^2.0 = 6.0",
 
 			"x: x = 1.414213562373095\n",
 		}
@@ -188,7 +188,7 @@ c: c = -a*x + -b*y
 		b := strings.builder_make_len_cap(0, 1024)
 		w := strings.to_writer(&b)
 	
-		write_contraints(w, constrs)
+		write_constraints(w, constrs)
 	
 		output := strings.to_string(b)
 
@@ -196,7 +196,7 @@ c: c = -a*x + -b*y
 
 			strings.builder_reset(&b) // makes output unusable !!!
 
-			write_contraints(w, constrs, {highlight=true})
+			write_constraints(w, constrs, {highlight=true})
 			output_pretty := strings.clone(strings.to_string(b))
 
 			strings.builder_reset(&b)

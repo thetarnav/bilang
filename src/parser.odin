@@ -11,17 +11,12 @@ Decl :: struct {
 }
 
 Expr :: union {
-	^Expr_Ident,
-	^Expr_Number,
+	^Expr_Single,
 	^Expr_Unary,
 	^Expr_Binary,
 }
 
-Expr_Ident :: struct {
-	token: Token,
-}
-
-Expr_Number :: struct {
+Expr_Single :: struct {
 	token: Token,
 }
 
@@ -88,24 +83,13 @@ token_precedence :: proc (token: Token) -> int {
 }
 
 @require_results
-expr_ident_new :: proc (token: Token, allocator := context.allocator, loc := #caller_location) ->
-	(ident: ^Expr_Ident, err: Parse_Error)
+expr_single_new :: proc (token: Token, allocator := context.allocator, loc := #caller_location) ->
+	(value: ^Expr_Single, err: Parse_Error)
 {
-	assert(token.kind == .Ident, loc=loc)
+	assert(token.kind == .Ident || token.kind == .Float || token.kind == .Int, loc=loc)
 
-	ident = new(Expr_Ident, allocator, loc=loc) or_return
-	ident.token = token
-
-	return
-}
-@require_results
-expr_number_new :: proc (token: Token, allocator := context.allocator, loc := #caller_location) ->
-	(number: ^Expr_Number, err: Parse_Error)
-{
-	assert(token.kind == .Num, loc=loc)
-
-	number = new(Expr_Number, allocator, loc=loc) or_return
-	number.token = token
+	value = new(Expr_Single, allocator, loc=loc) or_return
+	value.token = token
 
 	return
 }
@@ -256,12 +240,11 @@ parse_expr_bp :: proc (p: ^Parser, min_bp: int) -> (expr: Expr, err: Parse_Error
 parse_expr_atom :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error)
 {
 	#partial switch p.token.kind {
-	case .Ident:     expr = parse_ident(p)  or_return
-	case .Num:       expr = parse_number(p) or_return
-	case .Paren_L:   expr = parse_paren(p)  or_return
-	case .Add, .Sub: expr = parse_unary(p)  or_return
+	case .Ident, .Float, .Int: expr = parse_single(p) or_return
+	case .Paren_L:             expr = parse_paren(p)  or_return
+	case .Add, .Sub:           expr = parse_unary(p)  or_return
 	case:
-		return expr, Unexpected_Token_Error{p.token}
+		err = Unexpected_Token_Error{p.token}
 	}
 
 	return
@@ -292,23 +275,24 @@ parse_unary :: proc (p: ^Parser) -> (unary: ^Expr_Unary, err: Parse_Error)
 }
 
 @(require_results)
-parse_ident :: proc (p: ^Parser) -> (ident: ^Expr_Ident, err: Parse_Error)
+parse_single :: proc (p: ^Parser) -> (expr: ^Expr_Single, err: Parse_Error)
 {
-	ident, err = expr_ident_new(p.token, p.allocator)
+	expr, err = expr_single_new(p.token, p.allocator)
 	parser_next_token(p)
 	return
 }
 
-@(require_results)
-parse_number :: proc (p: ^Parser) -> (number: ^Expr_Number, err: Parse_Error)
-{
-	number, err = expr_number_new(p.token, p.allocator)
-	parser_next_token(p)
-	return
-}
-
-expr_number_value :: proc (expr: Expr_Number) -> (value: f64, ok: bool) {
+expr_single_float_value :: proc (expr: Expr_Single) -> (value: f64, ok: bool) {
+	assert(expr.token.kind == .Float)
 	return strconv.parse_f64(expr.token.text)
+}
+expr_single_int_value :: proc (expr: Expr_Single) -> (value: int, ok: bool) {
+	assert(expr.token.kind == .Int)
+	return strconv.parse_int(expr.token.text)
+}
+expr_single_ident_value :: proc (expr: Expr_Single) -> (value: string) {
+	assert(expr.token.kind == .Ident)
+	return expr.token.text
 }
 
 /*

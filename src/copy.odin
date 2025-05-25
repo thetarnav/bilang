@@ -17,8 +17,7 @@ copy_decl :: proc (decl: Decl, allocator := context.allocator) -> (new_decl: ^De
 copy_expr :: proc (expr: Expr, allocator := context.allocator) -> (new_expr: Expr)
 {
 	switch v in expr {
-	case ^Expr_Ident:  new_expr = copy_ident (v^, allocator)
-	case ^Expr_Number: new_expr = copy_number(v^, allocator)
+	case ^Expr_Single: new_expr = copy_single(v^, allocator)
 	case ^Expr_Unary:  new_expr = copy_unary (v^, allocator)
 	case ^Expr_Binary: new_expr = copy_binary(v^, allocator)
 	}
@@ -26,18 +25,10 @@ copy_expr :: proc (expr: Expr, allocator := context.allocator) -> (new_expr: Exp
 }
 
 @(require_results)
-copy_ident :: proc (ident: Expr_Ident, allocator := context.allocator) -> (new_ident: ^Expr_Ident)
+copy_single :: proc (single: Expr_Single, allocator := context.allocator) -> (new_single: ^Expr_Single)
 {
-	new_ident = new(Expr_Ident, allocator)
-	new_ident ^= ident
-	return
-}
-
-@(require_results)
-copy_number :: proc (number: Expr_Number, allocator := context.allocator) -> (new_number: ^Expr_Number)
-{
-	new_number = new(Expr_Number, allocator)
-	new_number ^= number
+	new_single = new(Expr_Single, allocator)
+	new_single ^= single
 	return
 }
 

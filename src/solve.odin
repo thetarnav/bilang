@@ -17,13 +17,15 @@ Atom :: struct {
 	kind: Atom_Kind,
 	using _: struct #raw_union {
 		using bin: struct {lhs, rhs: ^Atom},
-		num: f64,
+		float: f64,
+		int: int,
 		var: string,
 	},
 }
 
 Atom_Kind :: enum u8 {
-	Num,
+	Int,
+	Float,
 	Var,
 	Add,
 	Mul,
@@ -31,6 +33,7 @@ Atom_Kind :: enum u8 {
 	Pow,
 }
 
+ATOM_NUM_KINDS    :: bit_set[Atom_Kind]{.Int, .Float}
 ATOM_BINARY_KINDS :: bit_set[Atom_Kind]{.Add, .Div, .Mul, .Pow}
 
 Constraint :: struct {
@@ -47,22 +50,31 @@ atom_new :: proc (atom: Atom, loc := #caller_location) -> ^Atom {
 	return a
 }
 
-atom_num_zero    := Atom{kind=.Num, num= 0}
-atom_num_one     := Atom{kind=.Num, num= 1}
-atom_num_neg_one := Atom{kind=.Num, num=-1}
+atom_num_zero    := Atom{kind=.Int, int= 0}
+atom_num_one     := Atom{kind=.Int, int= 1}
+atom_num_neg_one := Atom{kind=.Int, int=-1}
 
 @require_results
-atom_num :: proc (num: f64, loc := #caller_location) -> ^Atom {
-	switch num {
+atom_int :: proc (val: int, loc := #caller_location) -> ^Atom {
+	switch val {
 	case  0: return &atom_num_zero
 	case  1: return &atom_num_one
 	case -1: return &atom_num_neg_one
 	}
 	return atom_new({
-		kind = .Num,
-		num  = num,
+		kind = .Int,
+		int  = val,
 	}, loc)
 }
+@require_results
+atom_float :: proc (val: f64, loc := #caller_location) -> ^Atom {
+	return atom_new({
+		kind  = .Float,
+		float = val,
+	}, loc)
+}
+@require_results
+atom_num :: proc {atom_int, atom_float}
 @require_results
 atom_var :: proc (var: string, loc := #caller_location) -> ^Atom {
 	return atom_new({
@@ -79,17 +91,45 @@ atom_binary :: proc (kind: Atom_Kind, lhs, rhs: ^Atom, loc := #caller_location) 
 	}, loc)
 }
 
+@require_results atom_is_binary :: proc (atom: Atom) -> bool {return atom.kind in ATOM_BINARY_KINDS}
+@require_results atom_is_num    :: proc (atom: Atom) -> bool {return atom.kind in ATOM_NUM_KINDS}
+
 @require_results
-is_var :: proc (atom: Atom, var: string) -> bool {
+atom_val_var_equals :: proc (atom: Atom, var: string) -> bool {
 	return atom.kind == .Var && atom.var == var
 }
 @require_results
-is_binary :: proc (atom: Atom) -> bool {
-	return atom.kind in ATOM_BINARY_KINDS
+atom_val_int_equals :: proc (atom: Atom, val: int) -> bool {
+	return atom.kind == .Int && atom.int == val
 }
 @require_results
-is_num :: proc (atom: Atom, num: f64) -> bool {
-	return atom.kind == .Num && atom.num == num
+atom_val_float_equals :: proc (atom: Atom, val: f64) -> bool {
+	return atom.kind == .Float && atom.float == val
+}
+atom_val_equals :: proc{atom_val_var_equals, atom_val_int_equals, atom_val_float_equals}
+
+atom_num_equals_zero :: proc (atom: Atom) -> bool {
+	#partial switch atom.kind {
+	case .Int:   return atom.int == 0
+	case .Float: return atom.float == 0
+	}
+	return false
+}
+atom_num_equals_one :: proc (atom: Atom) -> bool {
+	#partial switch atom.kind {
+	case .Int:   return atom.int == 1
+	case .Float: return atom.float == 1
+	}
+	return false
+}
+
+// Convert int atom to float atom
+@require_results
+atom_to_float :: proc (atom: ^Atom, loc := #caller_location) -> ^Atom {
+	if atom.kind == .Int {
+		return atom_float(f64(atom.int), loc)
+	}
+	return atom
 }
 
 @require_results
@@ -104,33 +144,6 @@ atom_copy :: proc (src: Atom, loc := #caller_location) -> Atom
 	return src
 }
 
-atom_get_mul_val_and_factor :: proc (atom: ^Atom) -> (val: ^Atom, f: f64)
-{
-	if atom.kind == .Mul {
-		if atom.lhs.kind == .Num {
-			return atom.rhs, atom.lhs.num
-		}
-		if atom.rhs.kind == .Num {
-			return atom.lhs, atom.rhs.num
-		}
-	}
-	return atom, 1
-}
-
-/* 
- x * x   ->  x, 1, 1
-2x * x   ->  x, 2, 1
- x * 2x  ->  x, 1, 2
-2x * 2x  ->  x, 2, 2
-*/
-atoms_get_mul_val_and_factors :: proc (a, b: ^Atom) -> (val: ^Atom, a_f, b_f: f64, ok: bool)
-{
-	a_val, a_num := atom_get_mul_val_and_factor(a)
-	b_val, b_num := atom_get_mul_val_and_factor(b)
-	atom_equals(a_val, b_val) or_return
-	return a_val, a_num, b_num, true
-}
-
 @require_results
 atom_add_if_possible :: proc (a, b: ^Atom) -> (sum: ^Atom, ok: bool)
 {
@@ -139,13 +152,47 @@ atom_add_if_possible :: proc (a, b: ^Atom) -> (sum: ^Atom, ok: bool)
 	visit_a_b :: proc (a, b: ^Atom) -> (res: ^Atom, ok: bool)
 	{
 		// 1 + 2  ->  3
-		if a.kind == .Num && b.kind == .Num {
-			return atom_num(a.num+b.num), true
+		if a.kind == .Int && b.kind == .Int {
+			return atom_num(a.int+b.int), true
 		}
+		else if a.kind == .Float && b.kind == .Float {
+			return atom_num(a.float+b.float), true
+		}
+		else if a.kind == .Int && b.kind == .Float {
+			return atom_num(f64(a.int)+b.float), true
+		}
+		else if a.kind == .Float && b.kind == .Int {
+			return atom_num(a.float+f64(b.int)), true
+		}
+ 
+		/*
+			x * x    ->  2x
+			2x * x   ->  3x
+			x * 2x   ->  3x
+			2x * 2x  ->  4x
+		*/
+		{
+			atom_val_factor :: proc (atom: ^Atom) -> (val: ^Atom, f: ^Atom)
+			{
+				if atom.kind == .Mul {
+					if atom.lhs.kind == .Int || atom.lhs.kind == .Float {
+						return atom.rhs, atom.lhs
+					} else if atom.rhs.kind == .Int || atom.rhs.kind == .Float {
+						return atom.lhs, atom.rhs
+					}
+				}
+				return atom, &atom_num_one
+			}
 
-		// 2x + 3x  ->  5x
-		if val, a_f, b_f, ok := atoms_get_mul_val_and_factors(a, b); ok {
-			return atom_mul_num(val, a_f+b_f), true
+			a_val, a_f := atom_val_factor(a)
+			b_val, b_f := atom_val_factor(b)
+
+			if atom_equals(a_val, b_val) {
+				return atom_mul(
+					a_val,
+					atom_add(a_f, b_f),
+				), true
+			}
 		}
 
 		// a/b + c/d  ->  (ad + cb)/bd
@@ -167,10 +214,15 @@ atom_add_if_possible :: proc (a, b: ^Atom) -> (sum: ^Atom, ok: bool)
 	
 	visit_b :: proc (a, b: ^Atom) -> (res: ^Atom, ok: bool)
 	{
-		#partial switch b.kind {
-		case .Num:
+		switch b.kind {
+		case .Int:
 			// x + 0  ->  x
-			if b.num == 0 {
+			if b.int == 0 {
+				return a, true
+			}
+		case .Float:
+			// x + 0  ->  x
+			if b.float == 0 {
 				return a, true
 			}
 		case .Div:
@@ -187,6 +239,7 @@ atom_add_if_possible :: proc (a, b: ^Atom) -> (sum: ^Atom, ok: bool)
 			if new_rhs, ok := visit_a_b(b.rhs, a); ok {
 				return atom_binary(.Add, b.lhs, new_rhs), true
 			}
+		case .Mul, .Pow, .Var:
 		}
 		return
 	}
@@ -197,7 +250,7 @@ atom_add :: proc (a, b: ^Atom, loc := #caller_location) -> ^Atom {
 }
 @require_results
 atom_add_num :: proc (atom: ^Atom, f: f64, loc := #caller_location) -> ^Atom {
-	return atom_add(atom, atom_num(f, loc), loc)
+	return atom_add(atom, atom_float(f, loc), loc)
 }
 @require_results
 atom_sub :: proc (lhs, rhs: ^Atom, loc := #caller_location) -> ^Atom {
@@ -212,13 +265,22 @@ atom_mul_if_possible :: proc (a, b: ^Atom) -> (product: ^Atom, ok: bool)
 	visit_a_b :: proc (a, b: ^Atom) -> (res: ^Atom, ok: bool)
 	{
 		// 2 * 3  ->  6
-		if a.kind == .Num && b.kind == .Num {
-			return atom_num(a.num*b.num), true
+		if a.kind == .Int && b.kind == .Int {
+			return atom_num(a.int*b.int), true
+		}
+		else if a.kind == .Float && b.kind == .Float {
+			return atom_num(a.float*b.float), true
+		}
+		else if a.kind == .Int && b.kind == .Float {
+			return atom_num(f64(a.int)*b.float), true
+		}
+		else if a.kind == .Float && b.kind == .Int {
+			return atom_num(a.float*f64(b.int)), true
 		}
 
 		// x * x  ->  x^2
 		if atom_equals(a^, b^) {
-			return atom_pow_num(a, 2), true
+			return atom_pow(a, 2), true
 		}
 
 		// (a + b) * (c + d) -> a*c + a*d + b*c + b*d
@@ -244,23 +306,29 @@ atom_mul_if_possible :: proc (a, b: ^Atom) -> (product: ^Atom, ok: bool)
 
 	visit_b :: proc (a, b: ^Atom) -> (res: ^Atom, ok: bool)
 	{
+		#partial switch b.kind {
+		case .Int:
+			switch b.int {
+			case 0: return b, true // x * 0  ->  0
+			case 1: return a, true // x * 1  ->  x
+			}
+		case .Float:
+			switch b.float {
+			case 0: return b, true // x * 0  ->  0
+			case 1: return a, true // x * 1  ->  x
+			}
+		}
+
 		// x^2 * x  ->  x^3
 		// ? should other exponents beside num be allowed?
-		if a.kind == .Pow && a.rhs.kind == .Num && atom_equals(a.lhs, b) {
+		if a.kind == .Pow && (a.rhs.kind == .Int || a.rhs.kind == .Float) && atom_equals(a.lhs, b) {
 			return atom_binary(.Pow,
 				a.lhs,
-				atom_num(a.rhs.num+1),
+				atom_add(a.rhs, &atom_num_one),
 			), true
 		}
 
-		if b.kind == .Num {
-			switch b.num {
-			// x * 0  ->  0
-			case 0: return b, true
-			// x * 1  ->  x
-			case 1: return a, true
-			}
-
+		if b.kind == .Int || b.kind == .Float {
 			// ? 	All these beyond num are sus
 			// ? probably need to use the atom_foo_if_possible procs here
 			// ? and take it out from num rhs
@@ -300,7 +368,7 @@ atom_mul :: proc (a, b: ^Atom, loc := #caller_location) -> ^Atom {
 }
 @require_results
 atom_mul_num :: proc (atom: ^Atom, f: f64, loc := #caller_location) -> ^Atom {
-	return atom_mul(atom, atom_num(f, loc), loc)
+	return atom_mul(atom, atom_float(f, loc), loc)
 }
 @require_results
 atom_neg :: proc (atom: ^Atom, loc := #caller_location) -> ^Atom {
@@ -311,20 +379,31 @@ atom_neg :: proc (atom: ^Atom, loc := #caller_location) -> ^Atom {
 atom_div_if_possible :: proc (dividened, divisor: ^Atom) -> (quotient: ^Atom, ok: bool)
 {
 	// 0/x  ->  0
-	if dividened.kind == .Num && dividened.num == 0 {
-		return &atom_num_zero, true
+	if atom_num_equals_zero(dividened^) {
+		return dividened, true
 	}
 
-	if divisor.kind == .Num do switch divisor.num {
 	// x/0  ->  X_X
-	case 0: return dividened, false
+	if atom_num_equals_zero(divisor^) {
+		return dividened, false
+	}
 	// x/1  ->  x
-	case 1: return dividened, true
+	if atom_num_equals_one(divisor^) {
+		return dividened, true
 	}
 
 	// 6/3  ->  2
-	if divisor.kind == .Num && dividened.kind == .Num {
-		return atom_num(dividened.num/divisor.num), true
+	if divisor.kind == .Int && dividened.kind == .Int {
+		return atom_num(dividened.int/divisor.int), true
+	}
+	else if divisor.kind == .Float && dividened.kind == .Float {
+		return atom_num(dividened.float/divisor.float), true
+	}
+	else if divisor.kind == .Int && dividened.kind == .Float {
+		return atom_num(dividened.float/f64(divisor.int)), true
+	}
+	else if divisor.kind == .Float && dividened.kind == .Int {
+		return atom_num(f64(dividened.int)/divisor.float), true
 	}
 
 	// x/x  ->  1
@@ -358,8 +437,12 @@ atom_div_if_possible :: proc (dividened, divisor: ^Atom) -> (quotient: ^Atom, ok
 		}
 	case .Pow:
 		// x^3 / x  ->  x^2
-		if dividened.rhs.kind == .Num && atom_equals(dividened.lhs, divisor) {
-			return atom_pow_num(dividened.lhs, dividened.rhs.num-1), true
+		if atom_equals(dividened.lhs, divisor) {
+			if dividened.rhs.kind == .Int {
+				return atom_pow(dividened.lhs, dividened.rhs.int-1), true
+			} else if dividened.rhs.kind == .Float {
+				return atom_pow(dividened.lhs, dividened.rhs.float-1), true
+			}
 		}
 	}
 	
@@ -370,7 +453,7 @@ atom_div :: proc (dividened, divisor: ^Atom, loc := #caller_location) -> ^Atom
 {
 	quotient, ok := atom_div_if_possible(dividened, divisor)
 	if !ok {
-		assert(divisor.kind != .Num || divisor.num != 0, "division by zero", loc)
+		assert(!atom_num_equals_zero(divisor^), "division by zero", loc)
 		quotient = atom_binary(.Div, dividened, divisor, loc)
 	}
 	return quotient
@@ -382,9 +465,10 @@ atom_div_num :: proc (dividened: ^Atom, f: f64, loc := #caller_location) -> ^Ato
 @require_results
 atom_flip :: proc (atom: ^Atom) -> ^Atom {
 	#partial switch atom.kind {
-	case .Div: return atom_div(atom.rhs, atom.lhs)
-	case .Num: return atom_num(1/atom.num)
-	case:      return atom_div(&atom_num_one, atom)
+	case .Div:   return atom_div(atom.rhs, atom.lhs)
+	case .Int:   return atom_num(1/f64(atom.int))
+	case .Float: return atom_num(1/atom.float)
+	case:        return atom_div(&atom_num_one, atom)
 	}
 }
 
@@ -416,7 +500,7 @@ atom_div_extract_var_if_possible :: proc (atom: ^Atom, var: string) -> (res: ^At
 		} else if rhs, ok := atom_div_extract_var_if_possible(atom.rhs, var); ok {
 			return atom_mul(atom.lhs, rhs), true
 		}
-	case .Pow, .Num:
+	case .Pow, .Int, .Float:
 		// skip
 	}
 
@@ -426,7 +510,8 @@ atom_div_extract_var_if_possible :: proc (atom: ^Atom, var: string) -> (res: ^At
 @require_results
 has_dependencies :: proc (atom: Atom) -> bool {
 	#partial switch atom.kind {
-	case .Num: return false
+	case .Int, .Float:
+	           return false
 	case .Var: return true
 	case:      return has_dependencies(atom.lhs^) ||
 	                  has_dependencies(atom.rhs^)
@@ -435,7 +520,8 @@ has_dependencies :: proc (atom: Atom) -> bool {
 @require_results
 has_dependency :: proc (atom: Atom, var: string) -> bool {
 	#partial switch atom.kind {
-	case .Num: return false
+	case .Int, .Float:
+	           return false
 	case .Var: return atom.var == var
 	case:      return has_dependency(atom.lhs^, var) ||
 	                  has_dependency(atom.rhs^, var)
@@ -444,7 +530,8 @@ has_dependency :: proc (atom: Atom, var: string) -> bool {
 @require_results
 has_dependency_other_than_var :: proc (atom: Atom, var: string) -> bool {
 	#partial switch atom.kind {
-	case .Num: return false
+	case .Int, .Float:
+	           return false
 	case .Var: return atom.var != var
 	case:      return has_dependency_other_than_var(atom.lhs^, var) ||
 	                  has_dependency_other_than_var(atom.rhs^, var)
@@ -453,44 +540,59 @@ has_dependency_other_than_var :: proc (atom: Atom, var: string) -> bool {
 
 @require_results
 atom_pow_if_possible :: proc (base, exponent: ^Atom) -> (pow: ^Atom, ok: bool) {
-	if exponent.kind == .Num {
-		switch exponent.num {
-		case 0: return &atom_num_one, true
-		case 1: return base, true
-		}
 
-		// 2^3  ->  8
-		if base.kind == .Num {
-			return atom_num(math.pow(base.num, exponent.num)), true
+	// 2^0  ->  1
+	if atom_num_equals_zero(exponent^) {
+		return &atom_num_one, true
+	}
+	// 2^1  ->  2
+	if atom_num_equals_one(exponent^) {
+		return base, true
+	}
+
+	// 2^3  ->  8
+	if exponent.kind == .Float && base.kind == .Float {
+		return atom_num(math.pow(base.float, exponent.float)), true
+	}
+	if exponent.kind == .Int && base.kind == .Int {
+		if res, ok := pow_int(base.int, exponent.int); ok {
+			return atom_num(res), true
 		}
 	}
 
 	return
 }
 @require_results
-atom_pow :: proc (base, exponent: ^Atom) -> ^Atom {
+atom_pow_atom :: proc (base, exponent: ^Atom) -> ^Atom {
 	return atom_pow_if_possible(base, exponent) or_else
 	       atom_binary(.Pow, base, exponent)
 }
 @require_results
-atom_pow_num :: proc (base: ^Atom, f: f64) -> ^Atom {
-	return atom_pow(base, atom_num(f))
+atom_pow_float :: proc (base: ^Atom, f: f64) -> ^Atom {
+	return atom_pow_atom(base, atom_num(f))
 }
+@require_results
+atom_pow_int :: proc (base: ^Atom, f: int) -> ^Atom {
+	return atom_pow_atom(base, atom_num(f))
+}
+atom_pow :: proc {atom_pow_atom, atom_pow_float, atom_pow_int}
 
 // Compares structurally
 @require_results
 atom_equals_val :: proc (a, b: Atom) -> bool
 {
-	if a.kind != b.kind {
-		return false
+	if a.kind == b.kind {
+		switch a.kind {
+		case .Int:   return a.int == b.int
+		case .Float: return a.float == b.float
+		case .Var:   return a.var == b.var
+		case .Add, .Div, .Mul, .Pow:
+			return atom_equals_ptr(a.lhs, b.lhs) &&
+				   atom_equals_ptr(a.rhs, b.rhs)
+		}
 	}
 
-	#partial switch a.kind {
-	case .Num: return a.num == b.num
-	case .Var: return a.var == b.var
-	case:      return atom_equals_ptr(a.lhs, b.lhs) &&
-	                  atom_equals_ptr(a.rhs, b.rhs)
-	}
+	return false
 }
 @require_results
 atom_equals_ptr :: proc (a, b: ^Atom) -> bool {
@@ -519,7 +621,7 @@ fold_atom :: proc (atom: ^^Atom, updated: ^bool)
 	{
 		res = atom
 
-		if !is_binary(atom^) {
+		if !atom_is_binary(atom^) {
 			return
 		}
 
@@ -539,11 +641,11 @@ fold_atom :: proc (atom: ^^Atom, updated: ^bool)
 
 try_substituting_var :: proc (atom: ^Atom, var: string, value: ^Atom) -> (res: ^Atom, ok: bool)
 {
-	if is_var(atom^, var) {
+	if atom_val_equals(atom^, var) {
 		return value, true
 	}
 
-	if is_binary(atom^) {
+	if atom_is_binary(atom^) {
 		lhs, lhs_ok := try_substituting_var(atom.lhs, var, value)
 		rhs, rhs_ok := try_substituting_var(atom.rhs, var, value)
 		if lhs_ok || rhs_ok {
@@ -556,7 +658,7 @@ try_substituting_var :: proc (atom: ^Atom, var: string, value: ^Atom) -> (res: ^
 
 @require_results
 is_constraint_solved :: proc (constr: Constraint) -> bool {
-	return is_var(constr.lhs^, constr.var.var) && !has_dependencies(constr.rhs^)
+	return atom_val_equals(constr.lhs^, constr.var.var) && !has_dependencies(constr.rhs^)
 }
 
 // Compares vars by value if they do not contradict
@@ -600,26 +702,35 @@ constraints_from_decls :: proc (decls: []Decl, allocator := context.allocator) -
 	return constrs[:]
 
 	atom_from_expr :: proc (
-		expr: Expr,
+		expr:            Expr,
 		all_constraints: ^[dynamic]Constraint,
 		decl_start:      int,                  // index into all_constraints
 	) -> (a: ^Atom)
 	{
 		switch v in expr {
-		case ^Expr_Ident:
-			name := v.token.text
-			a = atom_var(name)
-			
-			for c in all_constraints[decl_start:] {
-				if c.var.var == name do return a
-			}
-			// var not in decl constraints
-			append(all_constraints, Constraint{var = a})
+		case ^Expr_Single:
 
-		case ^Expr_Number:
-			value, _ := expr_number_value(v^)
-			// TODO: handle errors
-			return atom_num(value)
+			#partial switch v.token.kind {
+			case .Float:
+				value, _ := expr_single_float_value(v^)
+				// TODO: handle errors
+				return atom_float(value)
+			case .Int:
+				value, _ := expr_single_int_value(v^)
+				// TODO: handle errors
+				return atom_int(value)
+			case .Ident:
+				name := expr_single_ident_value(v^)
+				a = atom_var(name)
+				
+				for c in all_constraints[decl_start:] {
+					if c.var.var == name do return a
+				}
+				// var not in decl constraints
+				append(all_constraints, Constraint{var = a})
+			case:
+				unreachable()
+			}
 			
 		case ^Expr_Unary:
 			a = atom_from_expr(v.rhs, all_constraints, decl_start)
@@ -704,7 +815,7 @@ fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		x^2 = y  ->  x = y^(1/2)
 		*/
 		if !has_dependency(constr.lhs.rhs^, constr.var.var) {
-			constr.lhs, constr.rhs = constr.lhs.lhs, atom_pow(constr.rhs, atom_flip(constr.lhs.rhs))
+			constr.lhs, constr.rhs = constr.lhs.lhs, atom_pow_atom(constr.rhs, atom_flip(constr.lhs.rhs))
 
 			log_debug("moved exponent to rhs")
 			updated^ = true
