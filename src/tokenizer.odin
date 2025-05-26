@@ -24,6 +24,7 @@ Token_Kind :: enum u8 {
 	// Scalars
 	Int,           // 123
 	Float,         // 123.456, 0.123, 0, 1e2, 1.2e3
+	String,        // "hello world"
 	// Identifiers
 	Ident,         // abc_69
 }
@@ -120,6 +121,31 @@ next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, in_file: bool
 	case '*': return make_token(t, .Mul), true
 	case '/': return make_token(t, .Div), true
 	case '^': return make_token(t, .Pow), true
+	// String
+	case '"':
+		valid := true
+		for {
+			switch next_char(t) {
+			case 0:
+				return make_token_go_back(t, .Invalid), true // unterminated string
+			case '"':
+				if valid {
+					return make_token(t, .String), true
+				} else {
+					return make_token(t, .Invalid), true
+				}
+			case '\\':
+				// handle escape sequences
+				switch next_char(t) {
+				case 0:
+					return make_token_go_back(t, .Invalid), true // unterminated string
+				case '"', '\\', 'n', 'r', 't':
+					// valid escape sequences
+				case:
+					valid = false // mark as invalid but continue parsing
+				}
+			}
+		}
 	// Number
 	// 123
 	// 123.456

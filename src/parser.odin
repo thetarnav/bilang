@@ -86,7 +86,7 @@ token_precedence :: proc (token: Token) -> int {
 expr_single_new :: proc (token: Token, allocator := context.allocator, loc := #caller_location) ->
 	(value: ^Expr_Single, err: Parse_Error)
 {
-	assert(token.kind == .Ident || token.kind == .Float || token.kind == .Int, loc=loc)
+	assert(token.kind == .Ident || token.kind == .Float || token.kind == .Int || token.kind == .String, loc=loc)
 
 	value = new(Expr_Single, allocator, loc=loc) or_return
 	value.token = token
@@ -240,9 +240,9 @@ parse_expr_bp :: proc (p: ^Parser, min_bp: int) -> (expr: Expr, err: Parse_Error
 parse_expr_atom :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error)
 {
 	#partial switch p.token.kind {
-	case .Ident, .Float, .Int: expr = parse_single(p) or_return
-	case .Paren_L:             expr = parse_paren(p)  or_return
-	case .Add, .Sub:           expr = parse_unary(p)  or_return
+	case .Ident, .Float, .Int, .String: expr = parse_single(p) or_return
+	case .Paren_L:                      expr = parse_paren(p)  or_return
+	case .Add, .Sub:                    expr = parse_unary(p)  or_return
 	case:
 		err = Unexpected_Token_Error{p.token}
 	}
@@ -293,6 +293,15 @@ expr_single_int_value :: proc (expr: Expr_Single) -> (value: int, ok: bool) {
 expr_single_ident_value :: proc (expr: Expr_Single) -> (value: string) {
 	assert(expr.token.kind == .Ident)
 	return expr.token.text
+}
+expr_single_string_value :: proc (expr: Expr_Single) -> (value: string) {
+	assert(expr.token.kind == .String)
+	// Return the string without the surrounding quotes
+	text := expr.token.text
+	if len(text) >= 2 && text[0] == '"' && text[len(text)-1] == '"' {
+		return text[1:len(text)-1]
+	}
+	return text
 }
 
 /*
