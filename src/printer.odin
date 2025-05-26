@@ -44,7 +44,7 @@ write_newline :: proc (w: io.Writer) {
 _write_f64 :: proc(w: io.Writer, val: f64, n_written: ^int = nil) -> (n: int, err: io.Error) {
 	buf: [386]byte
 
-	str := strconv.append_float(buf[1:], val, 'g', 2*size_of(val), 8*size_of(val))
+	str := generic_ftoa(buf[1:], val, 8*size_of(val))
 	s := buf[:len(str)+1]
 	
 	if s[1] == '+' || s[1] == '-' {
