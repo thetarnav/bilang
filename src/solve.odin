@@ -394,6 +394,9 @@ atom_div_if_possible :: proc (dividened, divisor: ^Atom) -> (quotient: ^Atom, ok
 
 	// 6/3  ->  2
 	if divisor.kind == .Int && dividened.kind == .Int {
+		if dividened.int % divisor.int != 0 {
+			return atom_num(f64(dividened.int)/f64(divisor.int)), true
+		}
 		return atom_num(dividened.int/divisor.int), true
 	}
 	else if divisor.kind == .Float && dividened.kind == .Float {
@@ -554,10 +557,17 @@ atom_pow_if_possible :: proc (base, exponent: ^Atom) -> (pow: ^Atom, ok: bool) {
 	if exponent.kind == .Float && base.kind == .Float {
 		return atom_num(math.pow(base.float, exponent.float)), true
 	}
-	if exponent.kind == .Int && base.kind == .Int {
+	else if exponent.kind == .Int && base.kind == .Int {
 		if res, ok := pow_int(base.int, exponent.int); ok {
 			return atom_num(res), true
 		}
+		return atom_num(math.pow(f64(base.int), f64(exponent.int))), true
+	}
+	else if exponent.kind == .Int && base.kind == .Float {
+		return atom_num(math.pow(base.float, f64(exponent.int))), true
+	}
+	else if exponent.kind == .Float && base.kind == .Int {
+		return atom_num(math.pow(f64(base.int), exponent.float)), true
 	}
 
 	return
