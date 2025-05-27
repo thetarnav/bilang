@@ -186,4 +186,9 @@ solve_test_case :: proc(t: ^test.T, input: string, expected: string) {
 		"3 * x^2 = 6",
 		"x: x = 1.4142135623730951\n",
 	)
+
+	solve_test_case(t,
+		"a = \"hello\" + \"world\"",
+		"a: a = \"helloworld\"\n",
+	)
 }

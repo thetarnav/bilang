@@ -33,6 +33,7 @@ Writer_Options :: struct {
 }
 
 write_string :: io.write_string
+write_quoted_string :: io.write_quoted_string
 write_space :: proc (w: io.Writer) {
 	io.write_string(w, " ")
 }
@@ -68,30 +69,32 @@ _write_int :: proc(w: io.Writer, val: i64, n_written: ^int = nil) -> (n: int, er
 
 Highlight_Kind :: enum {
 	End,
-	Number,
+	Num,
+	Str,
 	Punct,
-	Operator,
+	Op,
 }
 
 write_highlight :: proc (w: io.Writer, kind: Highlight_Kind, opts: Writer_Options = {})
 {
 	if opts.highlight do switch kind {
-	case .End:      write_string(w, "\e[0m")
-	case .Number:   write_string(w, "\e[0;33m")
-	case .Operator: write_string(w, "\e[0;36m")
-	case .Punct:    write_string(w, "\e[38;5;240m")
+	case .End:   write_string(w, "\e[0m")
+	case .Num:   write_string(w, "\e[0;33m")
+	case .Str:   write_string(w, "\e[0;32m")
+	case .Op:    write_string(w, "\e[0;36m")
+	case .Punct: write_string(w, "\e[38;5;240m")
 	}
 }
 
 write_float :: proc (w: io.Writer, n: f64, opts: Writer_Options = {})
 {
-	write_highlight(w, .Number, opts)
+	write_highlight(w, .Num, opts)
 	_write_f64(w, n)
 	write_highlight(w, .End, opts)
 }
 write_int :: proc (w: io.Writer, n: int, opts: Writer_Options = {})
 {
-	write_highlight(w, .Number, opts)
+	write_highlight(w, .Num, opts)
 	_write_int(w, i64(n))
 	write_highlight(w, .End, opts)
 }
@@ -105,7 +108,7 @@ write_punct :: proc (w: io.Writer, c: string, opts: Writer_Options = {})
 
 write_operator :: proc (w: io.Writer, c: string, opts: Writer_Options = {})
 {
-	write_highlight(w, .Operator, opts)
+	write_highlight(w, .Op, opts)
 	write_string(w, c)
 	write_highlight(w, .End, opts)
 }
@@ -237,7 +240,11 @@ write_single :: proc (w: io.Writer, single: ^Expr_Single, opts: Writer_Options =
 {
 	#partial switch single.token.kind {
 	case .Float, .Int:
-		write_highlight(w, .Number, opts)
+		write_highlight(w, .Num, opts)
+		write_string(w, single.token.text)
+		write_highlight(w, .End, opts)
+	case .Str:
+		write_highlight(w, .Str, opts)
 		write_string(w, single.token.text)
 		write_highlight(w, .End, opts)
 	case .Ident:
@@ -302,6 +309,10 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 		write_int(w, atom.int, opts)
 	case .Float:
 		write_float(w, atom.float, opts)
+	case .Str:
+		write_highlight(w, .Num, opts)
+		write_quoted_string(w, atom.str)
+		write_highlight(w, .End, opts)
 	case .Var:
 		write_string(w, atom.var)
 	case .Add, .Mul, .Div, .Pow:
