@@ -1007,3 +1007,47 @@ try_finding_polynomial_solution :: proc (constr: ^Constraint, updated: ^bool)
 		log_debug("found polynomial solution")
 	}
 }
+
+// 1. solve
+// 2. remove duplicates
+// 3. return false if contradicting
+resolve :: proc (constrs_in: []Constraint, allocator := context.allocator) ->
+	(constrs_out: []Constraint, solved: bool, ok: bool)
+{
+	context.allocator = allocator
+
+	solve(constrs_in, allocator)
+
+	constrs_dyn := make([dynamic]Constraint, 0, len(constrs_in))
+	defer shrink(&constrs_dyn)
+
+	solved = true
+	ok = true
+
+	outer: for constr in constrs_in {
+
+		// remove duplicates
+		for &c in constrs_dyn {
+			if contraint_equals(constr, c) {
+				continue outer
+			}
+		}
+
+		if is_constraint_solved(constr) {
+			// check for contradictions
+			for &c in constrs_dyn {
+				if constr.var.var == c.var.var &&
+					is_constraint_solved(c) &&
+				   !atom_equals(constr.rhs, c.rhs) {
+					ok = false
+				}
+			}
+		} else {
+			solved = false
+		}
+
+		append(&constrs_dyn, constr)
+	}
+
+	return constrs_dyn[:], solved, ok
+}
