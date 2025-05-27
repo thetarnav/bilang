@@ -383,8 +383,21 @@ atom_div_if_possible :: proc (dividened, divisor: ^Atom) -> (quotient: ^Atom, ok
 		return dividened, true
 	}
 
-	// x/0  ->  X_X
+	// x/0  ->  Inf
 	if atom_num_equals_zero(divisor^) {
+		if dividened.kind == .Int {
+			if dividened.int < 0 {
+				return atom_num(math.inf_f64(-1)), true
+			} else {
+				return atom_num(math.inf_f64(1)), true
+			}
+		} else if dividened.kind == .Float {
+			if dividened.float < 0 {
+				return atom_num(math.inf_f64(-1)), true
+			} else {
+				return atom_num(math.inf_f64(1)), true
+			}
+		}
 		return dividened, false
 	}
 	// x/1  ->  x
@@ -456,13 +469,16 @@ atom_div :: proc (dividened, divisor: ^Atom, loc := #caller_location) -> ^Atom
 {
 	quotient, ok := atom_div_if_possible(dividened, divisor)
 	if !ok {
-		assert(!atom_num_equals_zero(divisor^), "division by zero", loc)
 		quotient = atom_binary(.Div, dividened, divisor, loc)
 	}
 	return quotient
 }
 @require_results
 atom_div_num :: proc (dividened: ^Atom, f: f64, loc := #caller_location) -> ^Atom {
+	switch f {
+	case 0: return atom_num(math.inf_f64(-1))
+	case 1: return atom_num(math.inf_f64(1))
+	}
 	return atom_div(dividened, atom_num(f, loc), loc)
 }
 @require_results

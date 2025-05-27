@@ -167,6 +167,21 @@ solve_test_case :: proc(t: ^test.T, input: string, expected: string) {
 	)
 
 	solve_test_case(t,
+		"x * x = 0\n",
+		"x: x = 0.0\n",
+	)
+
+	solve_test_case(t,
+		"x = 1/0\n",
+		"x: x = Inf\n",
+	)
+
+	solve_test_case(t,
+		"x = -1/0\n",
+		"x: x = -Inf\n",
+	)
+
+	solve_test_case(t,
 		"x * x = -1\n",
 		"x: x = NaN\n",
 		// TODO: fail because x is not real
