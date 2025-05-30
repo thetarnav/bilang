@@ -19,7 +19,7 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 	context.temp_allocator = case_allocator
 	context.allocator = case_allocator
 
-	decls, err := parse_src(input)
+	exprs, err := parse_src(input)
 	
 	if err != nil {
 		log.errorf(
@@ -29,7 +29,7 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 		return
 	}
 
-	constrs, solved, good := resolve(constraints_from_decls(decls))
+	constrs, solved, good := resolve(constraints_from_exprs(exprs))
 
 	b := strings.builder_make_len_cap(0, 1024)
 	w := strings.to_writer(&b)
@@ -46,13 +46,13 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 
 		strings.builder_reset(&b)
 
-		write_decls(w, decls, {highlight=true})
-		decls_pretty := strings.clone(strings.to_string(b))
+		write_exprs(w, exprs, {highlight=true})
+		exprs_pretty := strings.clone(strings.to_string(b))
 
 		strings.write_string(&b, fmt.aprintf(
 			"\n\nCASE:\n%s"+
 			"\nPARSED:\n%s",
-			input, decls_pretty,
+			input, exprs_pretty,
 		))
 
 		if output != expected {

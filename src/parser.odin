@@ -5,11 +5,6 @@ import "core:strconv"
 import "core:strings"
 
 
-Decl :: struct {
-	op_token: Token,
-	lhs, rhs: Expr,
-}
-
 Expr :: union {
 	^Expr_Single,
 	^Expr_Unary,
@@ -42,22 +37,15 @@ tokens_unary := #partial [Token_Kind]bool{
 	.Sub = true,
 }
 
-tokens_binary := #partial [Token_Kind]bool{
-	.Add = true,
-	.Sub = true,
-	.Mul = true,
-	.Div = true,
-	.Pow = true,
-	.Or  = true,
-}
-
+// precedence starts from 1, default = 0 - not a binary operator
 precedence_table := #partial [Token_Kind]int{
-	.Or  = 1,
-	.Add = 2,
-	.Sub = 2,
-	.Mul = 3,
-	.Div = 3,
-	.Pow = 4,
+	.Eq  = 1,
+	.Or  = 2,
+	.Add = 3,
+	.Sub = 3,
+	.Mul = 4,
+	.Div = 4,
+	.Pow = 5,
 }
 
 Parse_Error :: union {
@@ -79,7 +67,7 @@ Parser :: struct {
 }
 
 @require_results token_is_single :: proc (token: Token) -> bool {return tokens_single[token.kind]}
-@require_results token_is_binary :: proc (token: Token) -> bool {return tokens_binary[token.kind]}
+@require_results token_is_binary :: proc (token: Token) -> bool {return precedence_table[token.kind] > 0}
 @require_results token_is_unary  :: proc (token: Token) -> bool {return tokens_unary[token.kind]}
 
 @require_results
@@ -154,10 +142,10 @@ parser_curr_token_expect :: proc(
 parse_src :: proc (
 	src: string,
 	allocator := context.allocator,
-) -> (res: []Decl, err: Parse_Error)
+) -> (res: []Expr, err: Parse_Error)
 {
-	decls := make([dynamic]Decl, 0, 16, allocator) or_return
-	defer shrink(&decls)
+	exprs := make([dynamic]Expr, 0, 16, allocator) or_return
+	defer shrink(&exprs)
 
 	p: Parser = {
 		src       = src,
@@ -174,34 +162,22 @@ parse_src :: proc (
 		case .EOF:
 			break loop
 		case:
-			decl := parse_decl(&p) or_return
-			append(&decls, decl) or_return
+			expr := parse_expr(&p) or_return
+			append(&exprs, expr) or_return
+
+			#partial switch p.token.kind {
+			case .EOL, .EOF:
+				// good
+			case:
+				err = Unexpected_Token_Error{p.token}
+				return
+			}
+
+			parser_next_token(&p)
 		}
 	}
 
-	res = decls[:]
-	return
-}
-
-parse_decl :: proc (p: ^Parser) -> (decl: Decl, err: Parse_Error)
-{
-	decl.lhs = parse_expr(p) or_return
-	
-	parser_curr_token_expect(p, .Eq) or_return
-	decl.op_token = p.token
-
-	parser_next_token(p)
-	decl.rhs = parse_expr(p) or_return
-
-	#partial switch p.token.kind {
-	case .EOL, .EOF:
-		// good
-	case:
-		err = Unexpected_Token_Error{p.token}
-	}
-
-	parser_next_token(p)
-
+	res = exprs[:]
 	return
 }
 

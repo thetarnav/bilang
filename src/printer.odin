@@ -150,27 +150,15 @@ AST
 */
 
 
-print_decls :: proc (decls: []Decl, opts: Writer_Options = {}, fd := os.stdout) {
+print_exprs :: proc (exprs: []Expr, opts: Writer_Options = {}, fd := os.stdout) {
 	w := _scope_handle_writer(fd)
-	write_decls(w^, decls, opts)
+	write_exprs(w^, exprs, opts)
 }
-write_decls :: proc (w: io.Writer, decls: []Decl, opts: Writer_Options = {}) {
-	for decl in decls {
-		write_decl(w, decl, opts)
+write_exprs :: proc (w: io.Writer, exprs: []Expr, opts: Writer_Options = {}) {
+	for expr in exprs {
+		write_expr(w, expr, opts)
+		write_newline(w)
 	}
-}
-
-print_decl :: proc (decl: Decl, opts: Writer_Options = {}, fd := os.stdout) {
-	w := _scope_handle_writer(fd)
-	write_decl(w^, decl, opts)
-}
-write_decl :: proc (w: io.Writer, decl: Decl, opts: Writer_Options = {}) {
-	write_expr(w, decl.lhs, opts)
-	write_space(w)
-	write_operator_token(w, .Eq, opts)
-	write_space(w)
-	write_expr(w, decl.rhs, opts)
-	write_newline(w)
 }
 
 print_expr :: proc (expr: Expr, opts: Writer_Options = {}, fd := os.stdout)

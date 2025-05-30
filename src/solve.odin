@@ -5,6 +5,7 @@ import "base:intrinsics"
 
 import "core:math"
 import "core:strings"
+import "core:log"
 
 import "../utils"
 
@@ -718,22 +719,28 @@ is_constraint_solved :: proc (constr: Constraint) -> bool {
 // }
 
 @require_results
-constraints_from_decls :: proc (decls: []Decl, allocator := context.allocator) -> []Constraint
+constraints_from_exprs :: proc (exprs: []Expr, allocator := context.allocator) -> []Constraint
 {
 	context.allocator = allocator
 
 	constrs := make([dynamic]Constraint, 0, 16)
 	defer shrink(&constrs)
 
-	for decl in decls {
-		decl_start := len(constrs)
-
-		lhs := atom_from_expr(decl.lhs, &constrs, decl_start)
-		rhs := atom_from_expr(decl.rhs, &constrs, decl_start)
-		
-		for &constr in constrs[decl_start:] {
-			constr.lhs, constr.rhs = lhs, rhs
+	for expr in exprs {
+		if bin, ok := expr.(^Expr_Binary); ok {
+			expr_start := len(constrs)
+	
+			lhs := atom_from_expr(bin.lhs, &constrs, expr_start)
+			rhs := atom_from_expr(bin.rhs, &constrs, expr_start)
+			
+			for &constr in constrs[expr_start:] {
+				constr.lhs, constr.rhs = lhs, rhs
+			}
+		} else {
+			log.errorf("constraints_from_exprs: expected binary expression, got %T\n", expr)
+			continue
 		}
+
 	}
 
 	return constrs[:]

@@ -58,7 +58,7 @@ import "../utils"
 			continue
 		}
 
-		constrs := constraints_from_decls(decls)
+		constrs := constraints_from_exprs(decls)
 
 		utils.assert_equal(len(constrs),        1,             "constrs length")
 		utils.assert_equal(constrs[0].rhs.kind, Atom_Kind.Int, "rhs kind")

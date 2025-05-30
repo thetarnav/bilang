@@ -81,7 +81,7 @@ import test "core:testing"
 		defer free_all(case_allocator)
 
 		
-		decls, err := parse_src(test_case.input)
+		exprs, err := parse_src(test_case.input)
 	
 		if err != nil {
 			log.errorf(
@@ -94,7 +94,7 @@ import test "core:testing"
 		b := strings.builder_make_len_cap(0, 1024)
 		w := strings.to_writer(&b)
 	
-		write_decls(w, decls)
+		write_exprs(w, exprs)
 	
 		output := strings.to_string(b)
 
@@ -102,7 +102,7 @@ import test "core:testing"
 
 			strings.builder_reset(&b) // makes output unusable !!!
 
-			write_decls(w, decls, {highlight=true})
+			write_exprs(w, exprs, {highlight=true})
 			output_pretty := strings.clone(strings.to_string(b))
 
 			log.errorf(

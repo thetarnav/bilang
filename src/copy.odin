@@ -2,18 +2,6 @@ package bilang
 
 
 @(require_results)
-copy_decl :: proc (decl: Decl, allocator := context.allocator) -> (new_decl: ^Decl)
-{
-	new_decl = new(Decl, allocator)
-	new_decl ^= decl
-
-	new_decl.lhs = copy_expr(decl.lhs, allocator)
-	new_decl.rhs = copy_expr(decl.rhs, allocator)
-
-	return
-}
-
-@(require_results)
 copy_expr :: proc (expr: Expr, allocator := context.allocator) -> (new_expr: Expr)
 {
 	switch v in expr {
