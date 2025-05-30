@@ -59,7 +59,12 @@ import test "core:testing"
 			"-4*x^3 + 6*x^2 + 2 = 0",
 
 			"(((- 4) * (x ^ 3)) + (6 * (x ^ 2))) + 2 = 0\n",
-		}
+		},
+		{
+			"x = 1 | 2",
+
+			"x = 1 | 2\n",
+		},
 	}
 
 	@static arena_buf: [mem.Megabyte]byte

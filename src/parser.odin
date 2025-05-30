@@ -30,6 +30,13 @@ Expr_Binary :: struct {
 	lhs, rhs: Expr,
 }
 
+tokens_single := #partial [Token_Kind]bool{
+	.Ident = true,
+	.Float = true,
+	.Int   = true,
+	.Str   = true,
+}
+
 tokens_unary := #partial [Token_Kind]bool{
 	.Add = true,
 	.Sub = true,
@@ -41,14 +48,16 @@ tokens_binary := #partial [Token_Kind]bool{
 	.Mul = true,
 	.Div = true,
 	.Pow = true,
+	.Or  = true,
 }
 
 precedence_table := #partial [Token_Kind]int{
-	.Add = 1,
-	.Sub = 1,
-	.Mul = 2,
-	.Div = 2,
-	.Pow = 3,
+	.Or  = 1,
+	.Add = 2,
+	.Sub = 2,
+	.Mul = 3,
+	.Div = 3,
+	.Pow = 4,
 }
 
 Parse_Error :: union {
@@ -69,14 +78,10 @@ Parser :: struct {
 	allocator: mem.Allocator,
 }
 
-@require_results
-token_is_binary :: proc (token: Token) -> bool {
-	return tokens_binary[token.kind]
-}
-@require_results
-token_is_unary :: proc (token: Token) -> bool {
-	return tokens_unary[token.kind]
-}
+@require_results token_is_single :: proc (token: Token) -> bool {return tokens_single[token.kind]}
+@require_results token_is_binary :: proc (token: Token) -> bool {return tokens_binary[token.kind]}
+@require_results token_is_unary  :: proc (token: Token) -> bool {return tokens_unary[token.kind]}
+
 @require_results
 token_precedence :: proc (token: Token) -> int {
 	return precedence_table[token.kind]
@@ -86,7 +91,7 @@ token_precedence :: proc (token: Token) -> int {
 expr_single_new :: proc (token: Token, allocator := context.allocator, loc := #caller_location) ->
 	(value: ^Expr_Single, err: Parse_Error)
 {
-	assert(token.kind == .Ident || token.kind == .Float || token.kind == .Int || token.kind == .Str, loc=loc)
+	assert(token_is_single(token), loc=loc)
 
 	value = new(Expr_Single, allocator, loc=loc) or_return
 	value.token = token
@@ -241,8 +246,8 @@ parse_expr_atom :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error)
 {
 	#partial switch p.token.kind {
 	case .Ident, .Float, .Int, .Str: expr = parse_single(p) or_return
-	case .Paren_L:                      expr = parse_paren(p)  or_return
-	case .Add, .Sub:                    expr = parse_unary(p)  or_return
+	case .Paren_L:                   expr = parse_paren(p)  or_return
+	case .Add, .Sub:                 expr = parse_unary(p)  or_return
 	case:
 		err = Unexpected_Token_Error{p.token}
 	}

@@ -33,10 +33,11 @@ Atom_Kind :: enum u8 {
 	Mul,
 	Div,
 	Pow,
+	Or,
 }
 
 ATOM_NUM_KINDS    :: bit_set[Atom_Kind]{.Int, .Float}
-ATOM_BINARY_KINDS :: bit_set[Atom_Kind]{.Add, .Div, .Mul, .Pow}
+ATOM_BINARY_KINDS :: bit_set[Atom_Kind]{.Add, .Div, .Mul, .Pow, .Or}
 
 Constraint :: struct {
 	var:      ^Atom,
@@ -239,7 +240,7 @@ atom_add_if_possible :: proc (a, b: ^Atom) -> (sum: ^Atom, ok: bool)
 			if new_rhs, ok := visit_a_b(b.rhs, a); ok {
 				return atom_binary(.Add, b.lhs, new_rhs), true
 			}
-		case .Mul, .Pow, .Var, .Str:
+		case .Mul, .Pow, .Var, .Str, .Or:
 		}
 		return
 	}
@@ -519,7 +520,7 @@ atom_div_extract_var_if_possible :: proc (atom: ^Atom, var: string) -> (res: ^At
 		} else if rhs, ok := atom_div_extract_var_if_possible(atom.rhs, var); ok {
 			return atom_mul(atom.lhs, rhs), true
 		}
-	case .Pow, .Int, .Float, .Str:
+	case .Pow, .Int, .Float, .Str, .Or:
 		// skip
 	}
 
@@ -533,7 +534,7 @@ has_dependencies :: proc (atom: Atom) -> bool {
 		return false
 	case .Var:
 		return true
-	case .Add, .Div, .Mul, .Pow:
+	case .Add, .Div, .Mul, .Pow, .Or:
 		return has_dependencies(atom.lhs^) ||
 		       has_dependencies(atom.rhs^)
 	}
@@ -546,7 +547,7 @@ has_dependency :: proc (atom: Atom, var: string) -> bool {
 		return false
 	case .Var:
 		return atom.var == var
-	case .Add, .Div, .Mul, .Pow:
+	case .Add, .Div, .Mul, .Pow, .Or:
 		return has_dependency(atom.lhs^, var) ||
 		       has_dependency(atom.rhs^, var)
 	}
@@ -559,7 +560,7 @@ has_dependency_other_than_var :: proc (atom: Atom, var: string) -> bool {
 	    return false
 	case .Var:
 		return atom.var != var
-	case .Add, .Div, .Mul, .Pow:
+	case .Add, .Div, .Mul, .Pow, .Or:
 		return has_dependency_other_than_var(atom.lhs^, var) ||
 		       has_dependency_other_than_var(atom.rhs^, var)
 	}
@@ -622,7 +623,7 @@ atom_equals_val :: proc (a, b: Atom) -> bool
 		case .Float: return a.float == b.float
 		case .Str:   return a.str == b.str
 		case .Var:   return a.var == b.var
-		case .Add, .Div, .Mul, .Pow:
+		case .Add, .Div, .Mul, .Pow, .Or:
 			return atom_equals_ptr(a.lhs, b.lhs) &&
 				   atom_equals_ptr(a.rhs, b.rhs)
 		}
