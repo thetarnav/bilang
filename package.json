@@ -4,7 +4,9 @@
 	"license": "MIT",
 	"private": true,
 	"type": "module",
-	"scripts": {},
+	"scripts": {
+		"build": "node --experimental-transform-types build.ts"
+	},
 	"devDependencies": {
 		"typescript": "^5.4.5"
 	},
