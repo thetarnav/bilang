@@ -50,7 +50,7 @@ a     = -4 + 2
 	constrs := bilang.solve(decls)
 
 	fmt.print("\n-------\n\n")
-	bilang.print_contraints(constrs)
+	bilang.print_constraints(constrs)
 
 	mem.scratch_allocator_destroy(&parser_scratch)
 }

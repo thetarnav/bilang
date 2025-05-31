@@ -6,6 +6,7 @@ import "core:os"
 import "core:strings"
 import "core:strconv"
 import "core:bufio"
+import "core:encoding/ansi"
 
 
 @(private, deferred_out=_scope_handle_writer_flush)
@@ -67,22 +68,17 @@ _write_int :: proc(w: io.Writer, val: i64, n_written: ^int = nil) -> (n: int, er
 	return io.write_string(w, string(str), n_written)
 }
 
-Highlight_Kind :: enum {
-	End,
-	Num,
-	Str,
-	Punct,
-	Op,
-}
+Highlight_Kind :: enum {Reset, Num, Str, Punct, Op}
 
 write_highlight :: proc (w: io.Writer, kind: Highlight_Kind, opts: Writer_Options = {})
 {
+	using ansi
 	if opts.highlight do switch kind {
-	case .End:   write_string(w, "\e[0m")
-	case .Num:   write_string(w, "\e[0;33m")
-	case .Str:   write_string(w, "\e[0;32m")
-	case .Op:    write_string(w, "\e[0;36m")
-	case .Punct: write_string(w, "\e[38;5;240m")
+	case .Reset: write_string(w, CSI+RESET+SGR)
+	case .Num:   write_string(w, CSI+FG_YELLOW+SGR)
+	case .Str:   write_string(w, CSI+FG_GREEN+SGR)
+	case .Op:    write_string(w, CSI+FG_CYAN+SGR)
+	case .Punct: write_string(w, CSI+FG_COLOR_8_BIT+";240"+SGR)
 	}
 }
 
@@ -90,27 +86,27 @@ write_float :: proc (w: io.Writer, n: f64, opts: Writer_Options = {})
 {
 	write_highlight(w, .Num, opts)
 	_write_f64(w, n)
-	write_highlight(w, .End, opts)
+	write_highlight(w, .Reset, opts)
 }
 write_int :: proc (w: io.Writer, n: int, opts: Writer_Options = {})
 {
 	write_highlight(w, .Num, opts)
 	_write_int(w, i64(n))
-	write_highlight(w, .End, opts)
+	write_highlight(w, .Reset, opts)
 }
 
 write_punct :: proc (w: io.Writer, c: string, opts: Writer_Options = {})
 {
 	write_highlight(w, .Punct, opts)
 	write_string(w, c)
-	write_highlight(w, .End, opts)
+	write_highlight(w, .Reset, opts)
 }
 
 write_operator :: proc (w: io.Writer, c: string, opts: Writer_Options = {})
 {
 	write_highlight(w, .Op, opts)
 	write_string(w, c)
-	write_highlight(w, .End, opts)
+	write_highlight(w, .Reset, opts)
 }
 
 write_punct_token :: proc (w: io.Writer, t: Token_Kind, opts: Writer_Options = {})
@@ -231,11 +227,11 @@ write_single :: proc (w: io.Writer, single: ^Expr_Single, opts: Writer_Options =
 	case .Float, .Int:
 		write_highlight(w, .Num, opts)
 		write_string(w, single.token.text)
-		write_highlight(w, .End, opts)
+		write_highlight(w, .Reset, opts)
 	case .Str:
 		write_highlight(w, .Str, opts)
 		write_string(w, single.token.text)
-		write_highlight(w, .End, opts)
+		write_highlight(w, .Reset, opts)
 	case .Ident:
 		write_string(w, single.token.text)
 	case:
@@ -251,7 +247,7 @@ CONSTRAINTS
 */
 
 
-print_contraints :: proc (constrs: []Constraint, opts: Writer_Options = {}, fd := os.stdout) {
+print_constraints :: proc (constrs: []Constraint, opts: Writer_Options = {}, fd := os.stdout) {
 	w := _scope_handle_writer(fd)
 	write_constraints(w^, constrs, opts)
 }
@@ -301,7 +297,7 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 	case .Str:
 		write_highlight(w, .Num, opts)
 		write_quoted_string(w, atom.str)
-		write_highlight(w, .End, opts)
+		write_highlight(w, .Reset, opts)
 	case .Var:
 		write_string(w, atom.var)
 	case .Add, .Mul, .Div, .Pow, .Or:
