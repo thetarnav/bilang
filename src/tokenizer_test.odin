@@ -56,6 +56,14 @@ expected_list := []Expect_Tokens_Case {
 		"|",
 		{{.Or, "|"}},
 	},
+	{	"Greater than",
+		">",
+		{{.Gt, ">"}},
+	},
+	{	"Less than",
+		"<",
+		{{.Lt, "<"}},
+	},
 	/*
 	Names
 	*/
