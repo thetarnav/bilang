@@ -271,13 +271,7 @@ write_constraints :: proc (w: io.Writer, constrs: []Constraint, opts: Writer_Opt
 	for constr in constrs {
 		write_string(w, constr.var.var)
 		write_punct(w, ": ", opts)
-
-		write_atom(w, constr.lhs^, opts)
-		write_space(w)
-		write_operator_token(w, .Eq, opts)
-		write_space(w)
-		write_atom(w, constr.rhs^, opts)
-
+		write_atom(w, constr.atom^, opts)
 		write_newline(w)
 	}
 }
@@ -300,7 +294,7 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 		write_highlight(w, .Reset, opts)
 	case .Var:
 		write_string(w, atom.var)
-	case .Add, .Mul, .Div, .Pow, .Or:
+	case .Add, .Mul, .Div, .Pow, .Or, .Eq:
 
 		// x*-1  ->  -x
 		display_neg: if atom.kind == .Mul {
@@ -321,29 +315,26 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 		op: Token_Kind
 		#partial switch atom.kind {
 		case .Add: op = .Add
-		case .Mul: op = .Mul
+		case .Mul: op = .Mul 
 		case .Div: op = .Div
 		case .Pow: op = .Pow
 		case .Or:  op = .Or
+		case .Eq:  op = .Eq
 		}
 
-		is_nested := (atom.lhs.kind != atom.kind && atom_is_binary(atom.lhs^)) ||
-		             (atom.rhs.kind != atom.kind && atom_is_binary(atom.rhs^))
+		is_deep := (atom.lhs.kind != atom.kind && atom_is_binary(atom.lhs^)) ||
+		           (atom.rhs.kind != atom.kind && atom_is_binary(atom.rhs^))
+		
+		child_opts := opts
+		child_opts.parens = atom.kind != .Eq &&
+		                    (atom.lhs.kind != atom.kind || (atom.kind != .Mul && atom.kind != .Add))
 
-		if is_nested do write_paren(w, .Paren_L, opts)
-		{
-			opts := opts
-			opts.parens = atom.lhs.kind != atom.kind || (atom.kind != .Mul && atom.kind != .Add)
-			write_atom(w, atom.lhs^, opts)
-		}
-		if is_nested do write_space(w)
+		if is_deep do write_paren(w, .Paren_L, opts)
+		write_atom(w, atom.lhs^, child_opts)
+		if is_deep || atom.kind == .Eq do write_space(w)
 		write_operator_token(w, op, opts)
-		if is_nested do write_space(w)
-		{
-			opts := opts
-			opts.parens = atom.rhs.kind != atom.kind || (atom.kind != .Mul && atom.kind != .Add)
-			write_atom(w, atom.rhs^, opts)
-		}
-		if is_nested do write_paren(w, .Paren_R, opts)
+		if is_deep || atom.kind == .Eq do write_space(w)
+		write_atom(w, atom.rhs^, child_opts)
+		if is_deep do write_paren(w, .Paren_R, opts)
 	}
 }

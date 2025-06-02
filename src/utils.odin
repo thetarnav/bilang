@@ -1,11 +1,27 @@
 package bilang
 
+import "base:runtime"
 import "../utils"
 import "core:strconv"
 import "core:strconv/decimal"
 
 assert_equal :: utils.assert_equal
 is_int       :: utils.is_int
+
+
+@require_results
+new_val :: proc (
+	$T: typeid,
+	val: T,
+	allocator := context.allocator,
+	loc := #caller_location,
+) -> (ptr: ^T, err: runtime.Allocator_Error) #optional_allocator_error {
+	ptr, err = new(T, allocator, loc)
+	if err == nil {
+		ptr^ = val
+	}
+	return
+}
 
 @(require_results)
 pow_int :: proc "contextless" (base, exp: int) -> (result: int, ok: bool) {

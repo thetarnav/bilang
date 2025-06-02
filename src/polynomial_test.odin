@@ -60,13 +60,13 @@ import "../utils"
 
 		constrs := constraints_from_exprs(decls)
 
-		utils.assert_equal(len(constrs),        1,             "constrs length")
-		utils.assert_equal(constrs[0].rhs.kind, Atom_Kind.Int, "rhs kind")
-		utils.assert_equal(constrs[0].rhs.int,  0,             "rhs value")
+		assert_equal(constrs[0].atom.kind,     Atom_Kind.Eq,  "constr atom kind")
+		assert_equal(constrs[0].atom.rhs.kind, Atom_Kind.Int, "rhs kind")
+		assert_equal(constrs[0].atom.rhs.int,  0,             "rhs value")
 
-		fold_atom(&constrs[0].lhs, &_dummy_updated)
+		fold_atom(&constrs[0].atom.lhs, &_unused_updated)
 
-		poly, ok := polynomial_from_atom(constrs[0].lhs^, "x")
+		poly, ok := polynomial_from_atom(constrs[0].atom.lhs^, "x")
 		if !ok {
 			log.errorf("\nCouldn't get polynomial for CASE:\n%s", test_case.input)
 			return

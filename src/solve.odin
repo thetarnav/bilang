@@ -4,8 +4,8 @@ import "base:runtime"
 import "base:intrinsics"
 
 import "core:math"
+import "core:slice"
 import "core:strings"
-import "core:log"
 
 import "../utils"
 
@@ -35,22 +35,21 @@ Atom_Kind :: enum u8 {
 	Div,
 	Pow,
 	Or,
+	Eq,
 }
 
 ATOM_NUM_KINDS    :: bit_set[Atom_Kind]{.Int, .Float}
-ATOM_BINARY_KINDS :: bit_set[Atom_Kind]{.Add, .Div, .Mul, .Pow, .Or}
+ATOM_BINARY_KINDS :: bit_set[Atom_Kind]{.Add, .Div, .Mul, .Pow, .Or, .Eq}
 
 Constraint :: struct {
-	var:      ^Atom,
-	lhs, rhs: ^Atom,
+	var: ^Atom, atom: ^Atom,
 }
 
 @require_results
 atom_new :: proc (atom: Atom, loc := #caller_location) -> ^Atom {
-	a, err := new(Atom, loc=loc)
+	a, err := new_val(Atom, atom, loc=loc)
 	// TODO: setup a separate allocator for errors
 	utils.alloc_error_assert("atom_new error: ", err, loc)
-	a^ = atom
 	return a
 }
 
@@ -80,7 +79,7 @@ atom_var :: proc (var: string, loc := #caller_location) -> ^Atom {
 	return atom_new({kind=.Var, var=var}, loc)
 }
 @require_results
-atom_binary :: proc (kind: Atom_Kind, lhs, rhs: ^Atom, loc := #caller_location) -> ^Atom {
+atom_bin :: proc (kind: Atom_Kind, lhs, rhs: ^Atom, loc := #caller_location) -> ^Atom {
 	return atom_new({kind=kind, lhs=lhs, rhs=rhs}, loc)
 }
 
@@ -235,20 +234,20 @@ atom_add_if_possible :: proc (a, b: ^Atom) -> (sum: ^Atom, ok: bool)
 		case .Add:
 			// (x + y) + x  ->  2x + y
 			if new_lhs, ok := visit_a_b(b.lhs, a); ok {
-				return atom_binary(.Add, new_lhs, b.rhs), true
+				return atom_bin(.Add, new_lhs, b.rhs), true
 			}
 			// (y + x) + x  ->  y + 2x
 			if new_rhs, ok := visit_a_b(b.rhs, a); ok {
-				return atom_binary(.Add, b.lhs, new_rhs), true
+				return atom_bin(.Add, b.lhs, new_rhs), true
 			}
-		case .Mul, .Pow, .Var, .Str, .Or:
+		case .Mul, .Pow, .Var, .Str, .Or, .Eq:
 		}
 		return
 	}
 }
 @require_results
 atom_add :: proc (a, b: ^Atom, loc := #caller_location) -> ^Atom {
-	return atom_add_if_possible(a, b) or_else atom_binary(.Add, a, b, loc)
+	return atom_add_if_possible(a, b) or_else atom_bin(.Add, a, b, loc)
 }
 @require_results
 atom_add_num :: proc (atom: ^Atom, f: f64, loc := #caller_location) -> ^Atom {
@@ -324,7 +323,7 @@ atom_mul_if_possible :: proc (a, b: ^Atom) -> (product: ^Atom, ok: bool)
 		// x^2 * x  ->  x^3
 		// ? should other exponents beside num be allowed?
 		if a.kind == .Pow && (a.rhs.kind == .Int || a.rhs.kind == .Float) && atom_equals(a.lhs, b) {
-			return atom_binary(.Pow,
+			return atom_bin(.Pow,
 				a.lhs,
 				atom_add(a.rhs, &atom_num_one),
 			), true
@@ -343,7 +342,7 @@ atom_mul_if_possible :: proc (a, b: ^Atom) -> (product: ^Atom, ok: bool)
 				atom_mul(a.rhs, b),
 			), true
 			// (a / b) * 4  ->  4a / b
-			case .Div: return atom_binary(.Div,
+			case .Div: return atom_bin(.Div,
 				atom_mul(a.lhs, b),
 				a.rhs,
 			), true
@@ -353,11 +352,11 @@ atom_mul_if_possible :: proc (a, b: ^Atom) -> (product: ^Atom, ok: bool)
 		if a.kind == .Mul {
 			// (x * y) * x  ->  x^2 * y
 			if new_lhs, ok := visit_a_b(a.lhs, b); ok {
-				return atom_binary(.Mul, new_lhs, a.rhs), true
+				return atom_bin(.Mul, new_lhs, a.rhs), true
 			}
 			// (y * x) * x  ->  y * x^2
 			if new_rhs, ok := visit_a_b(a.rhs, b); ok {
-				return atom_binary(.Mul, a.lhs, new_rhs), true
+				return atom_bin(.Mul, a.lhs, new_rhs), true
 			}
 		}
 
@@ -366,7 +365,7 @@ atom_mul_if_possible :: proc (a, b: ^Atom) -> (product: ^Atom, ok: bool)
 }
 @require_results
 atom_mul :: proc (a, b: ^Atom, loc := #caller_location) -> ^Atom {
-	return atom_mul_if_possible(a, b) or_else atom_binary(.Mul, a, b, loc)
+	return atom_mul_if_possible(a, b) or_else atom_bin(.Mul, a, b, loc)
 }
 @require_results
 atom_mul_num :: proc (atom: ^Atom, f: f64, loc := #caller_location) -> ^Atom {
@@ -471,7 +470,7 @@ atom_div :: proc (dividened, divisor: ^Atom, loc := #caller_location) -> ^Atom
 {
 	quotient, ok := atom_div_if_possible(dividened, divisor)
 	if !ok {
-		quotient = atom_binary(.Div, dividened, divisor, loc)
+		quotient = atom_bin(.Div, dividened, divisor, loc)
 	}
 	return quotient
 }
@@ -521,7 +520,7 @@ atom_div_extract_var_if_possible :: proc (atom: ^Atom, var: string) -> (res: ^At
 		} else if rhs, ok := atom_div_extract_var_if_possible(atom.rhs, var); ok {
 			return atom_mul(atom.lhs, rhs), true
 		}
-	case .Pow, .Int, .Float, .Str, .Or:
+	case .Pow, .Int, .Float, .Str, .Or, .Eq:
 		// skip
 	}
 
@@ -530,42 +529,27 @@ atom_div_extract_var_if_possible :: proc (atom: ^Atom, var: string) -> (res: ^At
 
 @require_results
 has_dependencies :: proc (atom: Atom) -> bool {
-	switch atom.kind {
-	case .Int, .Float, .Str:
-		return false
-	case .Var:
-		return true
-	case .Add, .Div, .Mul, .Pow, .Or:
+	if atom_is_binary(atom) {
 		return has_dependencies(atom.lhs^) ||
 		       has_dependencies(atom.rhs^)
 	}
-	return false
+	return atom.kind == .Var
 }
 @require_results
 has_dependency :: proc (atom: Atom, var: string) -> bool {
-	switch atom.kind {
-	case .Int, .Float, .Str:
-		return false
-	case .Var:
-		return atom.var == var
-	case .Add, .Div, .Mul, .Pow, .Or:
+	if atom_is_binary(atom) {
 		return has_dependency(atom.lhs^, var) ||
 		       has_dependency(atom.rhs^, var)
 	}
-	return false
+	return atom.kind == .Var && atom.var == var
 }
 @require_results
 has_dependency_other_than_var :: proc (atom: Atom, var: string) -> bool {
-	switch atom.kind {
-	case .Int, .Float, .Str:
-	    return false
-	case .Var:
-		return atom.var != var
-	case .Add, .Div, .Mul, .Pow, .Or:
+	if atom_is_binary(atom) {
 		return has_dependency_other_than_var(atom.lhs^, var) ||
 		       has_dependency_other_than_var(atom.rhs^, var)
 	}
-	return false
+	return atom.kind == .Var && atom.var != var
 }
 
 @require_results
@@ -602,7 +586,7 @@ atom_pow_if_possible :: proc (base, exponent: ^Atom) -> (pow: ^Atom, ok: bool) {
 @require_results
 atom_pow_atom :: proc (base, exponent: ^Atom) -> ^Atom {
 	return atom_pow_if_possible(base, exponent) or_else
-	       atom_binary(.Pow, base, exponent)
+	       atom_bin(.Pow, base, exponent)
 }
 @require_results
 atom_pow_float :: proc (base: ^Atom, f: f64) -> ^Atom {
@@ -624,7 +608,7 @@ atom_equals_val :: proc (a, b: Atom) -> bool
 		case .Float: return a.float == b.float
 		case .Str:   return a.str == b.str
 		case .Var:   return a.var == b.var
-		case .Add, .Div, .Mul, .Pow, .Or:
+		case .Add, .Div, .Mul, .Pow, .Or, .Eq:
 			return atom_equals_ptr(a.lhs, b.lhs) &&
 				   atom_equals_ptr(a.rhs, b.rhs)
 		}
@@ -641,11 +625,11 @@ atom_equals :: proc{atom_equals_val, atom_equals_ptr}
 
 // Compares structurally
 @require_results
-contraint_equals :: proc (a, b: Constraint) -> bool {
-	return a.var == b.var && atom_equals(a.lhs, b.lhs) && atom_equals(a.rhs, b.rhs)
+constraint_equals :: proc (a, b: Constraint) -> bool {
+	return a.var == b.var && atom_equals(a.atom, b.atom)
 }
 
-_dummy_updated: bool
+_unused_updated: bool
 
 fold_atom :: proc (atom: ^^Atom, updated: ^bool)
 {
@@ -659,18 +643,19 @@ fold_atom :: proc (atom: ^^Atom, updated: ^bool)
 	{
 		res = atom
 
-		if !atom_is_binary(atom^) {
-			return
-		}
+		if !atom_is_binary(atom^) do return
 
 		fold_atom(&atom.lhs, &updated)
 		fold_atom(&atom.rhs, &updated)
 		
-		#partial switch atom.kind {
+		switch atom.kind {
 		case .Add: res = atom_add_if_possible(atom.lhs, atom.rhs) or_return
 		case .Mul: res = atom_mul_if_possible(atom.lhs, atom.rhs) or_return
 		case .Div: res = atom_div_if_possible(atom.lhs, atom.rhs) or_return
 		case .Pow: res = atom_pow_if_possible(atom.lhs, atom.rhs) or_return
+		case .Or, .Eq: return
+		case .Int, .Float, .Str, .Var:
+			unreachable()
 		}
 
 		return res, true
@@ -687,7 +672,7 @@ try_substituting_var :: proc (atom: ^Atom, var: string, value: ^Atom) -> (res: ^
 		lhs, lhs_ok := try_substituting_var(atom.lhs, var, value)
 		rhs, rhs_ok := try_substituting_var(atom.rhs, var, value)
 		if lhs_ok || rhs_ok {
-			return atom_binary(atom.kind, lhs, rhs), true
+			return atom_bin(atom.kind, lhs, rhs), true
 		}
 	}
 
@@ -696,7 +681,11 @@ try_substituting_var :: proc (atom: ^Atom, var: string, value: ^Atom) -> (res: ^
 
 @require_results
 is_constraint_solved :: proc (constr: Constraint) -> bool {
-	return atom_val_equals(constr.lhs^, constr.var.var) && !has_dependencies(constr.rhs^)
+	if constr.atom.kind == .Eq {
+		return atom_equals(constr.var, constr.atom.lhs) &&
+		       !has_dependencies(constr.atom.rhs^)
+	}
+	return false
 }
 
 // Compares vars by value if they do not contradict
@@ -718,113 +707,124 @@ is_constraint_solved :: proc (constr: Constraint) -> bool {
 // 	)
 // }
 
+atom_from_expr :: proc (expr: Expr) -> (a: ^Atom)
+{
+	switch v in expr {
+	case ^Expr_Single:
+
+		#partial switch v.token.kind {
+		case .Float:
+			value, _ := expr_single_float_value(v^)
+			// TODO: handle errors
+			return atom_float(value)
+		case .Int:
+			value, _ := expr_single_int_value(v^)
+			// TODO: handle errors
+			return atom_int(value)
+		case .Str:
+			value, _ := expr_single_string_value(v^)
+			// TODO: handle errors
+			return atom_str(value)
+		case .Ident:
+			name := expr_single_ident_value(v^)
+			a = atom_var(name)
+		case:
+			unreachable()
+		}
+		
+	case ^Expr_Unary:
+		a = atom_from_expr(v.rhs)
+		if v.op_token.kind == .Sub {
+			a = atom_neg(a)
+		}
+
+	case ^Expr_Binary:
+		a = atom_new({
+			lhs = atom_from_expr(v.lhs),
+			rhs = atom_from_expr(v.rhs),
+		})
+		
+		#partial switch v.op_token.kind {
+		case .Add: a.kind = .Add
+		case .Sub: a.kind = .Add
+		           a.rhs  = atom_neg(a.rhs)
+		case .Mul: a.kind = .Mul
+		case .Div: a.kind = .Div
+		case .Pow: a.kind = .Pow
+		case .Eq:  a.kind = .Eq
+		case .Or:  a.kind = .Or
+		case:
+			unreachable()
+		}
+	}
+
+	return
+}
+
 @require_results
 constraints_from_exprs :: proc (exprs: []Expr, allocator := context.allocator) -> []Constraint
 {
 	context.allocator = allocator
 
-	constrs := make([dynamic]Constraint, 0, 16)
+	atoms := slice.mapper(exprs, atom_from_expr, context.temp_allocator)
+	defer delete(atoms)
+
+	constrs := make([dynamic]Constraint, 0, 16, allocator)
 	defer shrink(&constrs)
 
-	for expr in exprs {
-		if bin, ok := expr.(^Expr_Binary); ok {
-			expr_start := len(constrs)
-	
-			lhs := atom_from_expr(bin.lhs, &constrs, expr_start)
-			rhs := atom_from_expr(bin.rhs, &constrs, expr_start)
-			
-			for &constr in constrs[expr_start:] {
-				constr.lhs, constr.rhs = lhs, rhs
-			}
-		} else {
-			log.errorf("constraints_from_exprs: expected binary expression, got %T\n", expr)
-			continue
-		}
+	for atom in atoms {
+		// Add constr for each var in atom,
+		// clone for subsequent vars
+		// and exclude vars that are already in constrs
 
+		_visit(atom, atom^, &constrs, len(constrs))
+		_visit :: proc (atom: ^Atom, root_atom: Atom, constrs: ^[dynamic]Constraint, start_idx: int)
+		{
+			if atom.kind == .Var {
+				// Check if var is already in constrs
+				for c in constrs[start_idx:] {
+					if c.var.var == atom.var {
+						return // already exists
+					}
+				}
+
+				// Add new constraint for this var
+				append(constrs, Constraint{
+					var  = atom,
+					atom = atom_new(root_atom if len(constrs) == start_idx else atom_copy(root_atom)),
+				})
+			} else if atom_is_binary(atom^) {
+				_visit(atom.lhs, root_atom, constrs, start_idx)
+				_visit(atom.rhs, root_atom, constrs, start_idx)
+			}
+		}
 	}
 
 	return constrs[:]
-
-	atom_from_expr :: proc (
-		expr:            Expr,
-		all_constraints: ^[dynamic]Constraint,
-		decl_start:      int,                  // index into all_constraints
-	) -> (a: ^Atom)
-	{
-		switch v in expr {
-		case ^Expr_Single:
-
-			#partial switch v.token.kind {
-			case .Float:
-				value, _ := expr_single_float_value(v^)
-				// TODO: handle errors
-				return atom_float(value)
-			case .Int:
-				value, _ := expr_single_int_value(v^)
-				// TODO: handle errors
-				return atom_int(value)
-			case .Str:
-				value, _ := expr_single_string_value(v^)
-				// TODO: handle errors
-				return atom_str(value)
-			case .Ident:
-				name := expr_single_ident_value(v^)
-				a = atom_var(name)
-				
-				for c in all_constraints[decl_start:] {
-					if c.var.var == name do return a
-				}
-				// var not in decl constraints
-				append(all_constraints, Constraint{var = a})
-			case:
-				unreachable()
-			}
-			
-		case ^Expr_Unary:
-			a = atom_from_expr(v.rhs, all_constraints, decl_start)
-			if v.op_token.kind == .Sub {
-				a = atom_neg(a)
-			}
-
-		case ^Expr_Binary:
-			a = atom_new({
-				lhs = atom_from_expr(v.lhs, all_constraints, decl_start),
-				rhs = atom_from_expr(v.rhs, all_constraints, decl_start),
-			})
-			
-			#partial switch v.op_token.kind {
-			case .Add: a.kind = .Add
-			case .Sub: a.kind = .Add
-			           a.rhs  = atom_neg(a.rhs)
-			case .Mul: a.kind = .Mul
-			case .Div: a.kind = .Div
-			case .Pow: a.kind = .Pow
-			}
-		}
-
-		return
-	}
 }
 
 fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 {
 	#no_bounds_check constr := &constrs[constr_i]
 	
-	fold_atom(&constr.lhs, updated)
-	fold_atom(&constr.rhs, updated)
+	fold_atom(&constr.atom, updated)
+
+	// Only support equality constraints for now
+	eq := constr.atom
+	if eq.kind != .Eq do return
 
 	/*
 	move addends if they do(n't) depend on var
 	*/
 	// 1+2+x = y  ->  x = y-1-2
-	if res, ok := move_addends(constr.lhs, &constr.rhs, constr.var.var, false); ok {
-		constr.lhs = res
+	if res, ok := move_addends(eq.lhs, &eq.rhs, constr.var.var, false); ok {
+		eq.lhs = res
 		updated^   = true
 		log_debug("move addends to rhs")
 	}
 	// x = 1+2-x  ->  x+x = 1+2
-	if res, ok := move_addends(constr.rhs, &constr.lhs, constr.var.var, true); ok {
-		constr.rhs = res
+	if res, ok := move_addends(eq.rhs, &eq.lhs, constr.var.var, true); ok {
+		eq.rhs = res
 		updated^   = true
 		log_debug("move addends to lhs")
 	}
@@ -850,10 +850,10 @@ fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		V	V	V	V	V	V	V	V	V	V
 	*/
 
-	#partial switch constr.lhs.kind {
+	#partial switch eq.lhs.kind {
 	case .Div:
 		// x/2 = y  ->  x = y*2
-		constr.lhs, constr.rhs = constr.lhs.lhs, atom_mul(constr.rhs, constr.lhs.rhs)
+		eq.lhs, eq.rhs = eq.lhs.lhs, atom_mul(eq.rhs, eq.lhs.rhs)
 		log_debug("moved lhs div to rhs")
 		updated^ = true
 
@@ -862,8 +862,8 @@ fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		move exponent to the right
 		x^2 = y  ->  x = y^(1/2)
 		*/
-		if !has_dependency(constr.lhs.rhs^, constr.var.var) {
-			constr.lhs, constr.rhs = constr.lhs.lhs, atom_pow_atom(constr.rhs, atom_flip(constr.lhs.rhs))
+		if !has_dependency(eq.lhs.rhs^, constr.var.var) {
+			eq.lhs, eq.rhs = eq.lhs.lhs, atom_pow_atom(eq.rhs, atom_flip(eq.lhs.rhs))
 
 			log_debug("moved exponent to rhs")
 			updated^ = true
@@ -874,8 +874,8 @@ fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		move factors to rhs
 		2 * x = 1  ->  x = 1/2
 		*/
-		if res, ok := move_factors(constr.lhs, &constr.rhs, constr.var.var); ok {
-			constr.lhs = res
+		if res, ok := move_factors(eq.lhs, &eq.rhs, constr.var.var); ok {
+			eq.lhs = res
 			updated^   = true
 			log_debug("move factors to rhs")
 		}
@@ -900,8 +900,8 @@ fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		extract var and divide rhs
 		2a + 3ab = y  ->  a(2 + 3b) = y  ->  a = y / (2 + 3b)
 		*/
-		if div, ok := atom_div_extract_var_if_possible(constr.lhs, constr.var.var); ok {
-			constr.lhs, constr.rhs = constr.var, atom_div(constr.rhs, div)
+		if div, ok := atom_div_extract_var_if_possible(eq.lhs, constr.var.var); ok {
+			eq.lhs, eq.rhs = constr.var, atom_div(eq.rhs, div)
 
 			log_debug("extracting var")
 			updated^ = true
@@ -961,18 +961,17 @@ solve :: proc (constrs: []Constraint, allocator := context.allocator)
 		for &constr, constr_i in constrs {
 			
 			if is_constraint_solved(constr) {
+
+				assert(constr.atom.kind == .Eq, "constraint should be solved with equality")
+				assert(constr.atom.lhs.kind == .Var, "lhs of solved constraint should be a var")
+
 				// try substituting solved vars
-				var := constr.lhs.var
-
 				for &constr2, constr2_i in constrs {
-					if constr_i == constr2_i || constr.var.var == constr2.var.var {
-						continue
+					if constr_i != constr2_i && constr.var.var != constr2.var.var {
+						atom, ok := try_substituting_var(constr2.atom, constr.var.var, constr.atom.rhs)
+						constr2.atom = atom
+						updated ||= ok
 					}
-
-					lhs, lhs_ok := try_substituting_var(constr2.lhs, var, constr.rhs)
-					rhs, rhs_ok := try_substituting_var(constr2.rhs, var, constr.rhs)
-					constr2.lhs, constr2.rhs = lhs, rhs
-					updated ||= lhs_ok || rhs_ok
 				}
 			} else {
 				// try approximation
@@ -992,25 +991,26 @@ try_finding_polynomial_solution :: proc (constr: ^Constraint, updated: ^bool)
 {
 	context.allocator = context.temp_allocator
 
-	if has_dependency_other_than_var(constr.lhs^, constr.var.var) ||
-	   has_dependency_other_than_var(constr.rhs^, constr.var.var) {
-		return
-	}
+	// Only support equality constraints for now
+	eq := constr.atom
+	if eq.kind != .Eq do return
+
+	if has_dependency_other_than_var(eq^, constr.var.var) do return
 
 	/*
 	move right to the left to have a single atom equals 0
 	x^2 + x = 12  ->  x^2 + x + -12 = 0
 	*/
-	atom := atom_sub(constr.lhs, constr.rhs)
-	fold_atom(&atom, &_dummy_updated)
+	atom := atom_sub(eq.lhs, eq.rhs)
+	fold_atom(&atom, &_unused_updated)
 
 	poly, ok := polynomial_from_atom(atom^, constr.var.var)
 	if !ok do return
 
 	root, found := find_polynomial_root(poly)
 	if found {
-		constr.lhs = atom_var(constr.var.var)
-		constr.rhs = atom_num(root)
+		eq.lhs = atom_var(constr.var.var)
+		eq.rhs = atom_num(root)
 		updated^   = true
 		log_debug("found polynomial solution")
 	}
@@ -1036,17 +1036,21 @@ resolve :: proc (constrs_in: []Constraint, allocator := context.allocator) ->
 
 		// remove duplicates
 		for &c in constrs_dyn {
-			if contraint_equals(constr, c) {
+			if constraint_equals(constr, c) {
 				continue outer
 			}
 		}
-
+		
 		if is_constraint_solved(constr) {
+
+			assert(constr.atom.kind == .Eq, "constraint should be solved with equality")
+			assert(constr.atom.lhs.kind == .Var, "lhs of solved constraint should be a var")
+
 			// check for contradictions
 			for &c in constrs_dyn {
 				if constr.var.var == c.var.var &&
-					is_constraint_solved(c) &&
-				   !atom_equals(constr.rhs, c.rhs) {
+				   is_constraint_solved(c) &&
+				   !atom_equals(constr.atom, c.atom) {
 					ok = false
 				}
 			}
