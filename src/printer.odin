@@ -269,7 +269,7 @@ constraints_to_string :: proc (
 write_constraints :: proc (w: io.Writer, constrs: []Constraint, opts: Writer_Options = {})
 {
 	for constr in constrs {
-		write_string(w, constr.var.var)
+		write_string(w, constr.var)
 		write_punct(w, ": ", opts)
 		write_atom(w, constr.atom^, opts)
 		write_newline(w)

@@ -112,7 +112,6 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 		"x = y\n"+
 		"y = 1",
 		"x: x = 1\n"+
-		"y: y = 1\n"+
 		"y: y = 1\n",
 	)
 
@@ -120,8 +119,7 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 		"a + b = 10\n"+
 		"a = -4 + 2",
 		"a: a = -2\n"+
-		"b: b = 12\n"+
-		"a: a = -2\n",	
+		"b: b = 12\n",	
 	)
 
 	solve_test_case(t,
@@ -133,7 +131,6 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 		"a: a = 0.5\n"+
 		"x: x = 12.0\n"+
 		"b: b = -4.0\n"+
-		"a: a = 0.5\n"+
 		"b: b = -4\n"+
 		"y: y = 2\n",
 		expected_good=false, // TODO: float == int
@@ -156,7 +153,6 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 		"(n * 2 + 10) / (n + 1) = 2 * x\n"+
 		"x * 2 = 3\n",
 		"n: n = 7.0\n"+
-		"x: x = 1.5\n"+
 		"x: x = 1.5\n",
 	)
 

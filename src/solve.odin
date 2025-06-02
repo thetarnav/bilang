@@ -42,7 +42,7 @@ ATOM_NUM_KINDS    :: bit_set[Atom_Kind]{.Int, .Float}
 ATOM_BINARY_KINDS :: bit_set[Atom_Kind]{.Add, .Div, .Mul, .Pow, .Or, .Eq}
 
 Constraint :: struct {
-	var: ^Atom, atom: ^Atom,
+	var: string, atom: ^Atom,
 }
 
 @require_results
@@ -609,8 +609,8 @@ atom_equals_val :: proc (a, b: Atom) -> bool
 		case .Str:   return a.str == b.str
 		case .Var:   return a.var == b.var
 		case .Add, .Div, .Mul, .Pow, .Or, .Eq:
-			return atom_equals_ptr(a.lhs, b.lhs) &&
-				   atom_equals_ptr(a.rhs, b.rhs)
+			return atom_equals(a.lhs, b.lhs) &&
+				   atom_equals(a.rhs, b.rhs)
 		}
 	}
 
@@ -618,7 +618,7 @@ atom_equals_val :: proc (a, b: Atom) -> bool
 }
 @require_results
 atom_equals_ptr :: proc (a, b: ^Atom) -> bool {
-	return a == b || atom_equals_val(a^, b^)
+	return a == b || atom_equals(a^, b^)
 }
 @require_results
 atom_equals :: proc{atom_equals_val, atom_equals_ptr}
@@ -682,7 +682,7 @@ try_substituting_var :: proc (atom: ^Atom, var: string, value: ^Atom) -> (res: ^
 @require_results
 is_constraint_solved :: proc (constr: Constraint) -> bool {
 	if constr.atom.kind == .Eq {
-		return atom_equals(constr.var, constr.atom.lhs) &&
+		return atom_val_equals(constr.atom.lhs^, constr.var) &&
 		       !has_dependencies(constr.atom.rhs^)
 	}
 	return false
@@ -783,14 +783,12 @@ constraints_from_exprs :: proc (exprs: []Expr, allocator := context.allocator) -
 			if atom.kind == .Var {
 				// Check if var is already in constrs
 				for c in constrs[start_idx:] {
-					if c.var.var == atom.var {
-						return // already exists
-					}
+					if c.var == atom.var do return
 				}
 
 				// Add new constraint for this var
 				append(constrs, Constraint{
-					var  = atom,
+					var  = atom.var,
 					atom = atom_new(root_atom if len(constrs) == start_idx else atom_copy(root_atom)),
 				})
 			} else if atom_is_binary(atom^) {
@@ -817,15 +815,15 @@ fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 	move addends if they do(n't) depend on var
 	*/
 	// 1+2+x = y  ->  x = y-1-2
-	if res, ok := move_addends(eq.lhs, &eq.rhs, constr.var.var, false); ok {
+	if res, ok := move_addends(eq.lhs, &eq.rhs, constr.var, false); ok {
 		eq.lhs = res
-		updated^   = true
+		updated^ = true
 		log_debug("move addends to rhs")
 	}
 	// x = 1+2-x  ->  x+x = 1+2
-	if res, ok := move_addends(eq.rhs, &eq.lhs, constr.var.var, true); ok {
+	if res, ok := move_addends(eq.rhs, &eq.lhs, constr.var, true); ok {
 		eq.rhs = res
-		updated^   = true
+		updated^ = true
 		log_debug("move addends to lhs")
 	}
 
@@ -862,7 +860,7 @@ fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		move exponent to the right
 		x^2 = y  ->  x = y^(1/2)
 		*/
-		if !has_dependency(eq.lhs.rhs^, constr.var.var) {
+		if !has_dependency(eq.lhs.rhs^, constr.var) {
 			eq.lhs, eq.rhs = eq.lhs.lhs, atom_pow_atom(eq.rhs, atom_flip(eq.lhs.rhs))
 
 			log_debug("moved exponent to rhs")
@@ -874,7 +872,7 @@ fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		move factors to rhs
 		2 * x = 1  ->  x = 1/2
 		*/
-		if res, ok := move_factors(eq.lhs, &eq.rhs, constr.var.var); ok {
+		if res, ok := move_factors(eq.lhs, &eq.rhs, constr.var); ok {
 			eq.lhs = res
 			updated^   = true
 			log_debug("move factors to rhs")
@@ -900,8 +898,8 @@ fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
 		extract var and divide rhs
 		2a + 3ab = y  ->  a(2 + 3b) = y  ->  a = y / (2 + 3b)
 		*/
-		if div, ok := atom_div_extract_var_if_possible(eq.lhs, constr.var.var); ok {
-			eq.lhs, eq.rhs = constr.var, atom_div(eq.rhs, div)
+		if div, ok := atom_div_extract_var_if_possible(eq.lhs, constr.var); ok {
+			eq.lhs, eq.rhs = atom_var(constr.var), atom_div(eq.rhs, div)
 
 			log_debug("extracting var")
 			updated^ = true
@@ -967,8 +965,8 @@ solve :: proc (constrs: []Constraint, allocator := context.allocator)
 
 				// try substituting solved vars
 				for &constr2, constr2_i in constrs {
-					if constr_i != constr2_i && constr.var.var != constr2.var.var {
-						atom, ok := try_substituting_var(constr2.atom, constr.var.var, constr.atom.rhs)
+					if constr_i != constr2_i && constr.var != constr2.var {
+						atom, ok := try_substituting_var(constr2.atom, constr.var, constr.atom.rhs)
 						constr2.atom = atom
 						updated ||= ok
 					}
@@ -995,7 +993,7 @@ try_finding_polynomial_solution :: proc (constr: ^Constraint, updated: ^bool)
 	eq := constr.atom
 	if eq.kind != .Eq do return
 
-	if has_dependency_other_than_var(eq^, constr.var.var) do return
+	if has_dependency_other_than_var(eq^, constr.var) do return
 
 	/*
 	move right to the left to have a single atom equals 0
@@ -1004,12 +1002,12 @@ try_finding_polynomial_solution :: proc (constr: ^Constraint, updated: ^bool)
 	atom := atom_sub(eq.lhs, eq.rhs)
 	fold_atom(&atom, &_unused_updated)
 
-	poly, ok := polynomial_from_atom(atom^, constr.var.var)
+	poly, ok := polynomial_from_atom(atom^, constr.var)
 	if !ok do return
 
 	root, found := find_polynomial_root(poly)
 	if found {
-		eq.lhs = atom_var(constr.var.var)
+		eq.lhs = atom_var(constr.var)
 		eq.rhs = atom_num(root)
 		updated^   = true
 		log_debug("found polynomial solution")
@@ -1048,7 +1046,7 @@ resolve :: proc (constrs_in: []Constraint, allocator := context.allocator) ->
 
 			// check for contradictions
 			for &c in constrs_dyn {
-				if constr.var.var == c.var.var &&
+				if constr.var == c.var &&
 				   is_constraint_solved(c) &&
 				   !atom_equals(constr.atom, c.atom) {
 					ok = false
