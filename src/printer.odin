@@ -6,7 +6,7 @@ import "core:os"
 import "core:strings"
 import "core:strconv"
 import "core:bufio"
-import "core:encoding/ansi"
+import "core:terminal/ansi"
 
 
 @(private, deferred_out=_scope_handle_writer_flush)
