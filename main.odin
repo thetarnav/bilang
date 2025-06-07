@@ -29,11 +29,23 @@ main :: proc ()
         mem.tracking_allocator_destroy(&track)
     }
 
+	// Read from stdin using a buffer approach
+    // @static buffer: [4096]byte
+    // total_bytes: [dynamic]byte
+    // defer delete(total_bytes)
+    
+    // for {
+    //     n, err := os.read(os.stdin, buffer[:])
+    //     if err != os.ERROR_NONE || n == 0 do break
+    //     append(&total_bytes, ..buffer[:n])
+    // }
+    // language_input := string(total_bytes[:])
 
-	language_input := `
-a + b = 10
-a     = -4 + 2
-`
+    language_input := `
+    a = 1
+    b = 2
+    c = a + b
+    `
 
 	parser_scratch: mem.Scratch_Allocator
 	mem.scratch_allocator_init(&parser_scratch, 1024)
@@ -45,12 +57,18 @@ a     = -4 + 2
 		os.exit(1)
 	}
 
-	bilang.print_decls(decls)
+	bilang.print_exprs(decls)
 
-	constrs := bilang.solve(decls)
+	constrs, solved, ok := bilang.resolve(bilang.constraints_from_exprs(decls))
 
 	fmt.print("\n-------\n\n")
 	bilang.print_constraints(constrs)
+
+	if ok {
+		fmt.print("\n--- Solved ---\n\n")
+	} else {
+		fmt.print("\n--- Could not solve ---\n")
+	}
 
 	mem.scratch_allocator_destroy(&parser_scratch)
 }
