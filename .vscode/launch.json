@@ -10,5 +10,28 @@
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "build-test",
         },
-    ],   
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Any Binary",
+            "program": "${input:binaryPath}",
+            "args": "${input:programArgs}",
+            "cwd": "${workspaceFolder}",
+            "stopOnEntry": false
+        }
+    ],
+    "inputs": [
+        {
+            "id": "binaryPath",
+            "description": "Path to binary to debug",
+            "default": "${workspaceFolder}/",
+            "type": "promptString"
+        },
+        {
+            "id": "programArgs",
+            "description": "Program arguments (space separated)",
+            "default": "",
+            "type": "promptString"
+        }
+    ]
 }
