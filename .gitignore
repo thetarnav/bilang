@@ -4,6 +4,7 @@ _*
 *.[oa]
 *.bin
 *~
+/bilang
 
 # Vscode config
 .vscode/settings.json

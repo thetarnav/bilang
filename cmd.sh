@@ -1,5 +1,12 @@
 #!/bin/bash
 
+prod_args=(
+	"-o:aggressive"
+	"-disable-assert"
+	"-no-bounds-check"
+	"-obfuscate-source-code-locations"
+)
+
 case "$1" in
 	build_test)
 		echo "Building test"
@@ -29,10 +36,25 @@ case "$1" in
 			-target:js_wasm32 \
 			-out:site/_main.wasm \
 			-error-pos-style:unix \
-			-o:aggressive \
-			-disable-assert \
-			-no-bounds-check \
-			-obfuscate-source-code-locations \
+			"${prod_args[@]}" \
+			"$@"
+		;;
+	build_cli_prod)
+		echo "Building cli prod"
+		shift
+		odin build . \
+			-out:bilang \
+			-error-pos-style:unix \
+			"${prod_args[@]}" \
+			"$@"
+		;;
+	build_cli_debug)
+		echo "Building cli debug"
+		shift
+		odin build . \
+			-out:bilang \
+			-error-pos-style:unix \
+			-debug \
 			"$@"
 		;;
 	*)
