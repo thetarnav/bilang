@@ -296,7 +296,7 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 	case .Float:
 		write_float(w, atom.float, opts)
 	case .Str:
-		write_highlight(w, .Num, opts)
+		write_highlight(w, .Str, opts)
 		write_quoted_string(w, atom.str)
 		write_highlight(w, .Reset, opts)
 	case .Var:
