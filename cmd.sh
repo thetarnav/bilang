@@ -60,7 +60,7 @@ case "$1" in
 	*)
 		# Default case when no matching script is found
 		echo "Invalid argument. Please provide a valid script name."
-		echo "Available scripts: test, build_wasm"
+		echo "Available scripts: test, build_wasm, build_cli_prod, build_cli_debug, build_test"
 		exit 1
 		;;
 esac
