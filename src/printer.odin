@@ -9,22 +9,22 @@ import "core:bufio"
 import "core:terminal/ansi"
 
 
-@(private, deferred_out=_scope_handle_writer_flush)
-_scope_handle_writer :: #force_inline proc (fd: os.Handle) -> (w_ptr: ^io.Writer)
-{
-	buf: [1024]byte
-	b: bufio.Writer
-	bufio.writer_init_with_buf(&b, os.stream_from_handle(fd), buf[:])
+Printer_Writer :: struct {
+	buf: [1024]byte,
+	b:   bufio.Writer,
+	w:   io.Writer,
+}
 
-	w := bufio.writer_to_writer(&b)
-	w_ptr = &w // sidestep returning a pointer to a local variable warning (the proc is inlined)
-	
-	return
+@(private, deferred_in=_scope_handle_writer_flush)
+_scope_handle_writer :: proc (w: ^Printer_Writer, fd: os.Handle)
+{
+	bufio.writer_init_with_buf(&w.b, os.stream_from_handle(fd), w.buf[:])
+	w.w = bufio.writer_to_writer(&w.b)
 }
 @(private)
-_scope_handle_writer_flush :: proc (w: ^io.Writer)
+_scope_handle_writer_flush :: proc (w: ^Printer_Writer, _: os.Handle)
 {
-	bufio.writer_flush(cast(^bufio.Writer)w.data) // writer_to_writer decls w.data to the bufio.Writer
+	bufio.writer_flush(&w.b)
 }
 
 
@@ -147,8 +147,9 @@ AST
 
 
 print_exprs :: proc (exprs: []Expr, opts: Writer_Options = {}, fd := os.stdout) {
-	w := _scope_handle_writer(fd)
-	write_exprs(w^, exprs, opts)
+	w: Printer_Writer
+	_scope_handle_writer(&w, fd)
+	write_exprs(w.w, exprs, opts)
 }
 write_exprs :: proc (w: io.Writer, exprs: []Expr, opts: Writer_Options = {}) {
 	for expr in exprs {
@@ -159,8 +160,9 @@ write_exprs :: proc (w: io.Writer, exprs: []Expr, opts: Writer_Options = {}) {
 
 print_expr :: proc (expr: Expr, opts: Writer_Options = {}, fd := os.stdout)
 {
-	w := _scope_handle_writer(fd)
-	write_expr(w^, expr, opts)
+	w: Printer_Writer
+	_scope_handle_writer(&w, fd)
+	write_expr(w.w, expr, opts)
 }
 write_expr :: proc (w: io.Writer, expr: Expr, opts: Writer_Options = {})
 {
@@ -174,8 +176,9 @@ write_expr :: proc (w: io.Writer, expr: Expr, opts: Writer_Options = {})
 
 print_binary :: proc (binary: ^Expr_Binary, opts: Writer_Options = {}, fd := os.stdout)
 {
-	w := _scope_handle_writer(fd)
-	write_binary(w^, binary, opts)
+	w: Printer_Writer
+	_scope_handle_writer(&w, fd)
+	write_binary(w.w, binary, opts)
 }
 write_binary :: proc (w: io.Writer, binary: ^Expr_Binary, opts: Writer_Options = {})
 {
@@ -200,8 +203,9 @@ write_binary :: proc (w: io.Writer, binary: ^Expr_Binary, opts: Writer_Options =
 
 print_unary :: proc (unary: ^Expr_Unary, opts: Writer_Options = {}, fd := os.stdout)
 {
-	w := _scope_handle_writer(fd)
-	write_unary(w^, unary, opts)
+	w: Printer_Writer
+	_scope_handle_writer(&w, fd)
+	write_unary(w.w, unary, opts)
 }
 write_unary :: proc (w: io.Writer, unary: ^Expr_Unary, opts: Writer_Options = {})
 {	
@@ -218,8 +222,9 @@ write_unary :: proc (w: io.Writer, unary: ^Expr_Unary, opts: Writer_Options = {}
 
 print_single :: proc (single: ^Expr_Single, opts: Writer_Options = {}, fd := os.stdout)
 {
-	w := _scope_handle_writer(fd)
-	write_single(w^, single, opts)
+	w: Printer_Writer
+	_scope_handle_writer(&w, fd)
+	write_single(w.w, single, opts)
 }
 write_single :: proc (w: io.Writer, single: ^Expr_Single, opts: Writer_Options = {})
 {
@@ -248,8 +253,9 @@ CONSTRAINTS
 
 
 print_constraints :: proc (constrs: []Constraint, opts: Writer_Options = {}, fd := os.stdout) {
-	w := _scope_handle_writer(fd)
-	write_constraints(w^, constrs, opts)
+	w: Printer_Writer
+	_scope_handle_writer(&w, fd)
+	write_constraints(w.w, constrs, opts)
 }
 
 @require_results
@@ -278,8 +284,9 @@ write_constraints :: proc (w: io.Writer, constrs: []Constraint, opts: Writer_Opt
 
 print_atom :: proc (atom: Atom, opts: Writer_Options = {}, fd := os.stdout)
 {
-	w := _scope_handle_writer(fd)
-	write_atom(w^, atom, opts)
+	w: Printer_Writer
+	_scope_handle_writer(&w, fd)
+	write_atom(w.w, atom, opts)
 }
 write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 {
