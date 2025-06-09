@@ -801,10 +801,8 @@ constraints_from_exprs :: proc (exprs: []Expr, allocator := context.allocator) -
 	return constrs[:]
 }
 
-fold_constraint :: proc (constr_i: int, constrs: []Constraint, updated: ^bool)
+fold_constraint :: proc (constr: ^Constraint, updated: ^bool)
 {
-	#no_bounds_check constr := &constrs[constr_i]
-	
 	fold_atom(&constr.atom, updated)
 
 	// Only support equality constraints for now
@@ -950,8 +948,8 @@ solve :: proc (constrs: []Constraint, allocator := context.allocator)
 
 		updated: bool
 
-		for _, constr_i in constrs {
-			fold_constraint(constr_i, constrs[:], &updated)
+		for &constr in constrs {
+			fold_constraint(&constr, &updated)
 		}
 
 		if updated do continue
