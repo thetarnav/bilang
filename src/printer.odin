@@ -64,7 +64,7 @@ _write_f64 :: proc(w: io.Writer, val: f64, n_written: ^int = nil) -> (n: int, er
 @private
 _write_int :: proc(w: io.Writer, val: i64, n_written: ^int = nil) -> (n: int, err: io.Error) {
 	buf: [32]byte
-	str := strconv.append_int(buf[:], val, 10)
+	str := strconv.write_int(buf[:], val, 10)
 	return io.write_string(w, string(str), n_written)
 }
 
