@@ -767,7 +767,7 @@ constraints_from_exprs :: proc (exprs: []Expr, allocator := context.allocator) -
 	context.allocator = allocator
 
 	atoms := slice.mapper(exprs, atom_from_expr, context.temp_allocator)
-	defer delete(atoms)
+	defer delete(atoms, context.temp_allocator)
 
 	constrs := make([dynamic]Constraint, 0, 16, allocator)
 	defer shrink(&constrs)
