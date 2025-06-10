@@ -739,7 +739,7 @@ _unused_updated: bool
 
 fold_atom :: proc (atom: ^^Atom, var: string) -> (updated: bool)
 {
-	loop: for atom_is_binary(atom^^) {
+	for atom_is_binary(atom^^) {
 
 		lhs, rhs := atom^.lhs, atom^.rhs
 		lhs_updated := fold_atom(&lhs, var)
@@ -766,10 +766,10 @@ fold_atom :: proc (atom: ^^Atom, var: string) -> (updated: bool)
 			// then we still need to update the atom
 			atom^ = atom_bin(atom^.kind, lhs, rhs)
 			updated = true
-			break loop
+			break
 		} else {
 			// If nothing was updated, then we can break the loop
-			break loop
+			break
 		}
 	}
 
