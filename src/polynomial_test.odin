@@ -64,7 +64,7 @@ import "../utils"
 		assert_equal(constrs[0].atom.rhs.kind, Atom_Kind.Int, "rhs kind")
 		assert_equal(constrs[0].atom.rhs.int,  0,             "rhs value")
 
-		fold_atom(&constrs[0].atom.lhs, &_unused_updated)
+		fold_atom(&constrs[0].atom.lhs, constrs[0].var)
 
 		poly, ok := polynomial_from_atom(constrs[0].atom.lhs^, "x")
 		if !ok {

@@ -598,6 +598,112 @@ atom_pow_int :: proc (base: ^Atom, f: int) -> ^Atom {
 }
 atom_pow :: proc {atom_pow_atom, atom_pow_float, atom_pow_int}
 
+atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var: string) -> (eq: ^Atom, updated: bool)
+{
+	lhs, rhs := lhs, rhs
+
+	/*
+	move addends if they do(n't) depend on var
+	*/
+	// 1+2+x = y  ->  x = y-1-2
+	if res, ok := move_addends(lhs, &rhs, var, false); ok {
+		lhs = res
+		updated = true
+		log_debug("move addends to rhs")
+	}
+	// x = 1+2-x  ->  x+x = 1+2
+	if res, ok := move_addends(rhs, &lhs, var, true); ok {
+		rhs = res
+		updated = true
+		log_debug("move addends to lhs")
+	}
+
+	move_addends :: proc (atom: ^Atom, dst: ^^Atom, var: string, cond: bool) -> (res: ^Atom, ok: bool)
+	{
+		if atom.kind == .Add {
+			lhs, lhs_ok := move_addends(atom.lhs, dst, var, cond)
+			rhs, rhs_ok := move_addends(atom.rhs, dst, var, cond)
+			if lhs_ok || rhs_ok {
+				return atom_add(lhs, rhs), true
+			}
+		} else if has_dependency(atom^, var) == cond {
+			dst^ = atom_sub(dst^, atom)
+			return &atom_num_zero, true
+		}
+		return atom, false
+	}
+
+	/*
+		^	^	^	^	^	^	^	^	^	^
+	TODO these could be merged together probably
+		V	V	V	V	V	V	V	V	V	V
+	*/
+
+	#partial switch lhs.kind {
+	case .Div:
+		// x/2 = y  ->  x = y*2
+		lhs, rhs = lhs.lhs, atom_mul(rhs, lhs.rhs)
+		log_debug("moved lhs div to rhs")
+		updated = true
+
+	case .Pow:
+		/*
+		move exponent to the right
+		x^2 = y  ->  x = y^(1/2)
+		*/
+		if !has_dependency(lhs.rhs^, var) {
+			lhs, rhs = lhs.lhs, atom_pow_atom(rhs, atom_flip(lhs.rhs))
+
+			log_debug("moved exponent to rhs")
+			updated = true
+		}
+
+	case .Mul:
+		/*
+		move factors to rhs
+		2 * x = 1  ->  x = 1/2
+		*/
+		if res, ok := move_factors(lhs, &rhs, var); ok {
+			lhs = res
+			updated = true
+			log_debug("move factors to rhs")
+		}
+
+		move_factors :: proc (atom: ^Atom, dst: ^^Atom, var: string) -> (res: ^Atom, updated: bool)
+		{
+			if atom.kind == .Mul {
+				lhs, lhs_ok := move_factors(atom.lhs, dst, var)
+				rhs, rhs_ok := move_factors(atom.rhs, dst, var)
+				if lhs_ok || rhs_ok {
+					return atom_mul(lhs, rhs), true
+				}
+			} else if !has_dependency(atom^, var) {
+				dst^ = atom_div(dst^, atom)
+				return &atom_num_one, true
+			}
+			return atom, false
+		}
+
+	case .Add:
+		/*
+		extract var and divide rhs
+		2a + 3ab = y  ->  a(2 + 3b) = y  ->  a = y / (2 + 3b)
+		*/
+		if div, ok := atom_div_extract_var_if_possible(lhs, var); ok {
+			lhs, rhs = atom_var(var), atom_div(rhs, div)
+
+			log_debug("extracting var")
+			updated = true
+		}
+	}
+
+	if updated {
+		eq = atom_bin(.Eq, lhs, rhs)
+	}
+
+	return
+}
+
 // Compares structurally
 @require_results
 atom_equals_val :: proc (a, b: Atom) -> bool
@@ -631,35 +737,43 @@ constraint_equals :: proc (a, b: Constraint) -> bool {
 
 _unused_updated: bool
 
-fold_atom :: proc (atom: ^^Atom, updated: ^bool)
+fold_atom :: proc (atom: ^^Atom, var: string) -> (updated: bool)
 {
-	for res in fold_atom_once(atom^) {
-		atom^    = res
-		updated^ = true
-		log_debug("folding atom")
-	}
+	loop: for atom_is_binary(atom^^) {
 
-	fold_atom_once :: proc (atom: ^Atom) -> (res: ^Atom, updated: bool)
-	{
-		res = atom
+		lhs, rhs := atom^.lhs, atom^.rhs
+		lhs_updated := fold_atom(&lhs, var)
+		rhs_updated := fold_atom(&rhs, var)
 
-		if !atom_is_binary(atom^) do return
-
-		fold_atom(&atom.lhs, &updated)
-		fold_atom(&atom.rhs, &updated)
-		
-		switch atom.kind {
-		case .Add: res = atom_add_if_possible(atom.lhs, atom.rhs) or_return
-		case .Mul: res = atom_mul_if_possible(atom.lhs, atom.rhs) or_return
-		case .Div: res = atom_div_if_possible(atom.lhs, atom.rhs) or_return
-		case .Pow: res = atom_pow_if_possible(atom.lhs, atom.rhs) or_return
-		case .Or, .Eq: return
-		case .Int, .Float, .Str, .Var:
-			unreachable()
+		res: ^Atom; bin_updated: bool
+		switch atom^.kind {
+		case .Add: res, bin_updated = atom_add_if_possible(lhs, rhs)
+		case .Mul: res, bin_updated = atom_mul_if_possible(lhs, rhs)
+		case .Div: res, bin_updated = atom_div_if_possible(lhs, rhs)
+		case .Pow: res, bin_updated = atom_pow_if_possible(lhs, rhs)
+		case .Eq:  res, bin_updated = atom_eq_if_possible(lhs, rhs, var)
+		case .Or:  // not handled
+		case .Int, .Float, .Str, .Var: unreachable()
 		}
 
-		return res, true
+		if bin_updated {
+			// If the bin was updated, then we can use it
+			atom^ = res
+			updated = true
+			log_debug("folding atom")
+		} else if lhs_updated || rhs_updated {
+			// If lhs or rhs were updated, but not the bin itself
+			// then we still need to update the atom
+			atom^ = atom_bin(atom^.kind, lhs, rhs)
+			updated = true
+			break loop
+		} else {
+			// If nothing was updated, then we can break the loop
+			break loop
+		}
 	}
+
+	return
 }
 
 try_substituting_var :: proc (atom: ^Atom, var: string, value: ^Atom) -> (res: ^Atom, ok: bool)
@@ -801,110 +915,6 @@ constraints_from_exprs :: proc (exprs: []Expr, allocator := context.allocator) -
 	return constrs[:]
 }
 
-fold_constraint :: proc (constr: ^Constraint, updated: ^bool)
-{
-	fold_atom(&constr.atom, updated)
-
-	// Only support equality constraints for now
-	eq := constr.atom
-	if eq.kind != .Eq do return
-
-	/*
-	move addends if they do(n't) depend on var
-	*/
-	// 1+2+x = y  ->  x = y-1-2
-	if res, ok := move_addends(eq.lhs, &eq.rhs, constr.var, false); ok {
-		eq.lhs = res
-		updated^ = true
-		log_debug("move addends to rhs")
-	}
-	// x = 1+2-x  ->  x+x = 1+2
-	if res, ok := move_addends(eq.rhs, &eq.lhs, constr.var, true); ok {
-		eq.rhs = res
-		updated^ = true
-		log_debug("move addends to lhs")
-	}
-
-	move_addends :: proc (atom: ^Atom, dst: ^^Atom, var: string, cond: bool) -> (res: ^Atom, ok: bool)
-	{
-		if atom.kind == .Add {
-			lhs, lhs_ok := move_addends(atom.lhs, dst, var, cond)
-			rhs, rhs_ok := move_addends(atom.rhs, dst, var, cond)
-			if lhs_ok || rhs_ok {
-				return atom_add(lhs, rhs), true
-			}
-		} else if has_dependency(atom^, var) == cond {
-			dst^ = atom_sub(dst^, atom)
-			return &atom_num_zero, true
-		}
-		return atom, false
-	}
-
-	/*
-		^	^	^	^	^	^	^	^	^	^
-	TODO these could be merged together probably
-		V	V	V	V	V	V	V	V	V	V
-	*/
-
-	#partial switch eq.lhs.kind {
-	case .Div:
-		// x/2 = y  ->  x = y*2
-		eq.lhs, eq.rhs = eq.lhs.lhs, atom_mul(eq.rhs, eq.lhs.rhs)
-		log_debug("moved lhs div to rhs")
-		updated^ = true
-
-	case .Pow:
-		/*
-		move exponent to the right
-		x^2 = y  ->  x = y^(1/2)
-		*/
-		if !has_dependency(eq.lhs.rhs^, constr.var) {
-			eq.lhs, eq.rhs = eq.lhs.lhs, atom_pow_atom(eq.rhs, atom_flip(eq.lhs.rhs))
-
-			log_debug("moved exponent to rhs")
-			updated^ = true
-		}
-
-	case .Mul:
-		/*
-		move factors to rhs
-		2 * x = 1  ->  x = 1/2
-		*/
-		if res, ok := move_factors(eq.lhs, &eq.rhs, constr.var); ok {
-			eq.lhs = res
-			updated^   = true
-			log_debug("move factors to rhs")
-		}
-
-		move_factors :: proc (atom: ^Atom, dst: ^^Atom, var: string) -> (res: ^Atom, ok: bool)
-		{
-			if atom.kind == .Mul {
-				lhs, lhs_ok := move_factors(atom.lhs, dst, var)
-				rhs, rhs_ok := move_factors(atom.rhs, dst, var)
-				if lhs_ok || rhs_ok {
-					return atom_mul(lhs, rhs), true
-				}
-			} else if !has_dependency(atom^, var) {
-				dst^ = atom_div(dst^, atom)
-				return &atom_num_one, true
-			}
-			return atom, false
-		}
-
-	case .Add:
-		/*
-		extract var and divide rhs
-		2a + 3ab = y  ->  a(2 + 3b) = y  ->  a = y / (2 + 3b)
-		*/
-		if div, ok := atom_div_extract_var_if_possible(eq.lhs, constr.var); ok {
-			eq.lhs, eq.rhs = atom_var(constr.var), atom_div(eq.rhs, div)
-
-			log_debug("extracting var")
-			updated^ = true
-		}
-	}
-}
-
 solve :: proc (constrs: []Constraint, allocator := context.allocator)
 {
 	context.allocator = allocator
@@ -949,7 +959,8 @@ solve :: proc (constrs: []Constraint, allocator := context.allocator)
 		updated: bool
 
 		for &constr in constrs {
-			fold_constraint(&constr, &updated)
+			fold_atom(&constr.atom, constr.var) or_continue
+			updated = true
 		}
 
 		if updated do continue
@@ -998,7 +1009,7 @@ try_finding_polynomial_solution :: proc (constr: ^Constraint, updated: ^bool)
 	x^2 + x = 12  ->  x^2 + x + -12 = 0
 	*/
 	atom := atom_sub(eq.lhs, eq.rhs)
-	fold_atom(&atom, &_unused_updated)
+	fold_atom(&atom, constr.var)
 
 	poly, ok := polynomial_from_atom(atom^, constr.var)
 	if !ok do return
