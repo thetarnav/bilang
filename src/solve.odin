@@ -145,6 +145,11 @@ atom_add_if_possible :: proc (a, b: ^Atom) -> (sum: ^Atom, ok: bool)
 
 	visit_a_b :: proc (a, b: ^Atom) -> (res: ^Atom, ok: bool)
 	{
+		// Check for distribution over or expressions first
+		if result, distributed := distribute_over_or(.Add, a, b); distributed {
+			return result, true
+		}
+		
 		// 1 + 2  ->  3
 		if a.kind == .Int && b.kind == .Int {
 			return atom_num(a.int+b.int), true
@@ -265,6 +270,11 @@ atom_mul_if_possible :: proc (a, b: ^Atom) -> (product: ^Atom, ok: bool)
 
 	visit_a_b :: proc (a, b: ^Atom) -> (res: ^Atom, ok: bool)
 	{
+		// Check for distribution over or expressions first
+		if result, distributed := distribute_over_or(.Mul, a, b); distributed {
+			return result, true
+		}
+		
 		// 2 * 3  ->  6
 		if a.kind == .Int && b.kind == .Int {
 			return atom_num(a.int*b.int), true
@@ -379,6 +389,11 @@ atom_neg :: proc (atom: ^Atom, loc := #caller_location) -> ^Atom {
 @require_results
 atom_div_if_possible :: proc (dividened, divisor: ^Atom) -> (quotient: ^Atom, ok: bool)
 {
+	// Check for distribution over or expressions first
+	if result, distributed := distribute_over_or(.Div, dividened, divisor); distributed {
+		return result, true
+	}
+	
 	// 0/x  ->  0
 	if atom_num_equals_zero(dividened^) {
 		return dividened, true
@@ -554,6 +569,10 @@ has_dependency_other_than_var :: proc (atom: Atom, var: string) -> bool {
 
 @require_results
 atom_pow_if_possible :: proc (base, exponent: ^Atom) -> (pow: ^Atom, ok: bool) {
+	// Check for distribution over or expressions first
+	if result, distributed := distribute_over_or(.Pow, base, exponent); distributed {
+		return result, true
+	}
 
 	// 2^0  ->  1
 	if atom_num_equals_zero(exponent^) {
@@ -597,6 +616,40 @@ atom_pow_int :: proc (base: ^Atom, f: int) -> ^Atom {
 	return atom_pow_atom(base, atom_num(f))
 }
 atom_pow :: proc {atom_pow_atom, atom_pow_float, atom_pow_int}
+
+@require_results
+atom_or_if_possible :: proc (lhs, rhs: ^Atom) -> (or_expr: ^Atom, ok: bool) {
+	// No simplification for basic or expressions - just return as is
+	// The real work happens when operations are applied to or expressions
+	return
+}
+
+@require_results
+atom_or :: proc (a, b: ^Atom, loc := #caller_location) -> ^Atom {
+	return atom_or_if_possible(a, b) or_else atom_bin(.Or, a, b, loc)
+}
+
+// Helper function to distribute operations over or expressions
+@require_results
+distribute_over_or :: proc (op_kind: Atom_Kind, a, b: ^Atom) -> (result: ^Atom, ok: bool)
+{
+	// If 'a' is an or expression: (x | y) op b -> (x op b) | (y op b)
+	if a.kind == .Or {
+		return atom_or(
+			atom_bin(op_kind, a.lhs, b),
+			atom_bin(op_kind, a.rhs, b),
+		), true
+	}
+	// If 'b' is an or expression: a op (x | y) -> (a op x) | (a op y)
+	if b.kind == .Or {
+		return atom_or(
+			atom_bin(op_kind, a, b.lhs),
+			atom_bin(op_kind, a, b.rhs),
+		), true
+	}
+	
+	return
+}
 
 atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var: string) -> (eq: ^Atom, updated: bool)
 {
@@ -752,7 +805,7 @@ fold_atom :: proc (atom: ^^Atom, var: string) -> (updated: bool)
 		case .Div: res, bin_updated = atom_div_if_possible(lhs, rhs)
 		case .Pow: res, bin_updated = atom_pow_if_possible(lhs, rhs)
 		case .Eq:  res, bin_updated = atom_eq_if_possible(lhs, rhs, var)
-		case .Or:  // not handled
+		case .Or:  res, bin_updated = atom_or_if_possible(lhs, rhs)
 		case .Int, .Float, .Str, .Var: unreachable()
 		}
 

@@ -241,4 +241,13 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 		"a = \"hello\" + \"world\"",
 		"a: a = \"helloworld\"\n",
 	)
+
+	solve_test_case(t,
+		"a = 2 | 1\n"+
+		"b = a * 2",
+		"a: a = 2|1\n"+
+		"b: b = 4|2\n"+
+		"a: a = 2.0|1.0\n",
+		expected_good=false, // TODO: float == int
+	)
 }
