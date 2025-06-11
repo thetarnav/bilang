@@ -4,14 +4,9 @@
         {
             "label": "build-test",
             "type": "shell",
-            "command": "odin",
+            "command": "make",
             "args": [
-                "build",
-                "src",
-                "-error-pos-style:unix",
-                "-build-mode:test",
-                "-debug",
-                "-out:test.bin"
+                "build-test"
             ],
             "group": "build",
             "presentation": {

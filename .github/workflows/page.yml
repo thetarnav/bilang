@@ -16,7 +16,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build site wasm
-        run: ./cmd.sh build_wasm
+        run: make build-wasm
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
