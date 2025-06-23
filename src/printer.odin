@@ -345,3 +345,50 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 		if is_deep do write_paren(w, .Paren_R, opts)
 	}
 }
+
+// Print atom transformations showing the history of changes
+@require_results
+atom_transformations_to_string :: proc (
+	atom: Atom,
+	opts: Writer_Options = {},
+	allocator := context.allocator,
+) -> (s: string, err: mem.Allocator_Error) #optional_allocator_error
+{
+	b := strings.builder_make_len_cap(0, 1024, allocator) or_return
+	w := strings.to_writer(&b)
+
+	write_atom_transformations(w, atom, opts)
+
+	return strings.to_string(b), nil
+}
+
+write_atom_transformations :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
+{
+	// Build list of transformation steps by following the from chain
+	transformations := make([dynamic]Atom, context.temp_allocator)
+	defer delete(transformations)
+
+	atom := atom
+	for {
+		append(&transformations, atom)
+		if atom.from == nil do break
+		atom = atom.from^
+	}
+
+	#reverse for step, i in transformations {
+		write_atom(w, step, opts)
+		
+		if i > 0 {
+			write_highlight(w, .Punct, opts)
+			write_string(w, "\n-> ")
+			write_highlight(w, .Reset, opts)
+		}
+	}
+}
+
+print_atom_transformations :: proc (atom: Atom, opts: Writer_Options = {}, fd := os.stdout)
+{
+	w: Printer_Writer
+	_scope_handle_writer(&w, fd)
+	write_atom_transformations(w.w, atom, opts)
+}
