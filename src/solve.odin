@@ -133,15 +133,15 @@ atom_to_float :: proc (atom: ^Atom, loc := #caller_location) -> ^Atom {
 }
 
 @require_results
-atom_copy :: proc (src: Atom, loc := #caller_location) -> Atom
+atom_copy :: proc (src: Atom, loc := #caller_location) -> (dst: Atom)
 {
+	dst = src
 	#partial switch src.kind {
 	case .Add, .Div, .Mul, .Pow:
-		dst := src
 		dst.lhs = atom_new(atom_copy(dst.lhs^, loc))
 		dst.rhs = atom_new(atom_copy(dst.rhs^, loc))
 	}
-	return src
+	return dst
 }
 
 @require_results
