@@ -956,7 +956,7 @@ constraints_from_exprs :: proc (exprs: []Expr, allocator := context.allocator) -
 				// Add new constraint for this var
 				append(constrs, Constraint{
 					var  = atom.var,
-					atom = atom_new(root_atom if len(constrs) == start_idx else atom_copy(root_atom)),
+					atom = atom_new(root_atom),
 				})
 			} else if atom_is_binary(atom^) {
 				_visit(atom.lhs, root_atom, constrs, start_idx)
