@@ -39,13 +39,15 @@ tokens_unary := #partial [Token_Kind]bool{
 
 // precedence starts from 1, default = 0 - not a binary operator
 precedence_table := #partial [Token_Kind]int{
-	.Eq  = 1,
-	.Or  = 2,
-	.Add = 3,
-	.Sub = 3,
-	.Mul = 4,
-	.Div = 4,
-	.Pow = 5,
+	.EOL = 1,
+	.Eq  = 2,
+	.And = 3,
+	.Or  = 3,
+	.Add = 4,
+	.Sub = 4,
+	.Mul = 5,
+	.Div = 5,
+	.Pow = 6,
 }
 
 Parse_Error :: union {
@@ -142,17 +144,16 @@ parser_curr_token_expect :: proc(
 parse_src :: proc (
 	src: string,
 	allocator := context.allocator,
-) -> (res: []Expr, err: Parse_Error)
+) -> (res: Expr, err: Parse_Error)
 {
-	exprs := make([dynamic]Expr, 0, 16, allocator) or_return
-	defer shrink(&exprs)
-
 	p: Parser = {
 		src       = src,
 		t         = make_tokenizer(src),
 		allocator = allocator,
 	}
 	parser_next_token(&p)
+	
+	found_expr: bool
 	
 	loop: for {
 		#partial switch p.token.kind {
@@ -163,7 +164,6 @@ parse_src :: proc (
 			break loop
 		case:
 			expr := parse_expr(&p) or_return
-			append(&exprs, expr) or_return
 
 			#partial switch p.token.kind {
 			case .EOL, .EOF:
@@ -173,11 +173,22 @@ parse_src :: proc (
 				return
 			}
 
+			if !found_expr {
+				res = expr
+				found_expr = true
+			} else {
+				res = expr_binary_new(p.token, res, expr, allocator) or_return
+			}
+
 			parser_next_token(&p)
 		}
 	}
 
-	res = exprs[:]
+	if !found_expr {
+		// Return a dummy expression for empty input
+		res = expr_single_new({kind = .Int, text = "0"}, allocator) or_return
+	}
+
 	return
 }
 
@@ -197,7 +208,6 @@ parse_expr_bp :: proc (p: ^Parser, min_bp: int) -> (expr: Expr, err: Parse_Error
 
 	for {
 		op := p.token
-		token_is_binary(op) or_break
 
 		lbp := token_precedence(op)
 		if lbp < min_bp do return
@@ -208,6 +218,7 @@ parse_expr_bp :: proc (p: ^Parser, min_bp: int) -> (expr: Expr, err: Parse_Error
 		}
 
 		parser_next_token(p)
+		if p.token.kind == .EOF do return
 
 		rhs := parse_expr_bp(p, rbp) or_return
 
@@ -224,6 +235,9 @@ parse_expr_atom :: proc (p: ^Parser) -> (expr: Expr, err: Parse_Error)
 	case .Ident, .Float, .Int, .Str: expr = parse_single(p) or_return
 	case .Paren_L:                   expr = parse_paren(p)  or_return
 	case .Add, .Sub:                 expr = parse_unary(p)  or_return
+	case .EOL:
+		parser_next_token(p)
+		return parse_expr_atom(p)
 	case:
 		err = Unexpected_Token_Error{p.token}
 	}

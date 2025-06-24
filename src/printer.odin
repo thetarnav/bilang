@@ -36,10 +36,10 @@ Writer_Options :: struct {
 write_string :: io.write_string
 write_quoted_string :: io.write_quoted_string
 write_space :: proc (w: io.Writer) {
-	io.write_string(w, " ")
+	io.write_rune(w, ' ')
 }
 write_newline :: proc (w: io.Writer) {
-	io.write_string(w, "\n")
+	io.write_rune(w, '\n')
 }
 
 @(private)
@@ -127,6 +127,8 @@ write_operator_token :: proc (w: io.Writer, t: Token_Kind, opts: Writer_Options 
 	case .Div: write_operator(w, "/", opts)
 	case .Pow: write_operator(w, "^", opts)
 	case .Or:  write_operator(w, "|", opts)
+	case .And: write_operator(w, "&", opts)
+	case .EOL: write_newline(w)
 	}
 }
 
@@ -144,19 +146,6 @@ write_paren :: proc (w: io.Writer, t: Token_Kind, opts: Writer_Options = {})
 AST
 
 */
-
-
-print_exprs :: proc (exprs: []Expr, opts: Writer_Options = {}, fd := os.stdout) {
-	w: Printer_Writer
-	_scope_handle_writer(&w, fd)
-	write_exprs(w.w, exprs, opts)
-}
-write_exprs :: proc (w: io.Writer, exprs: []Expr, opts: Writer_Options = {}) {
-	for expr in exprs {
-		write_expr(w, expr, opts)
-		write_newline(w)
-	}
-}
 
 print_expr :: proc (expr: Expr, opts: Writer_Options = {}, fd := os.stdout)
 {
@@ -182,21 +171,25 @@ print_binary :: proc (binary: ^Expr_Binary, opts: Writer_Options = {}, fd := os.
 }
 write_binary :: proc (w: io.Writer, binary: ^Expr_Binary, opts: Writer_Options = {})
 {
+	child_opts := opts
+	child_opts.parens = opts.parens || (
+		binary.op_token.kind != .And &&
+		binary.op_token.kind != .EOL &&
+		binary.op_token.kind != .Eq)
+
 	write_paren(w, .Paren_L, opts)
 
-	{
-		opts := opts
-		opts.parens = true
-		write_expr(w, binary.lhs, opts)
+	write_expr(w, binary.lhs, child_opts)
+
+	if binary.op_token.kind == .EOL {
+		write_newline(w)
+	} else {
+		write_space(w)
+		write_operator(w, binary.op_token.text, opts)
+		write_space(w)
 	}
-	write_space(w)
-	write_operator(w, binary.op_token.text, opts)
-	write_space(w)
-	{
-		opts := opts
-		opts.parens = true
-		write_expr(w, binary.rhs, opts)
-	}
+	
+	write_expr(w, binary.rhs, child_opts)
 
 	write_paren(w, .Paren_R, opts)
 }
@@ -252,7 +245,7 @@ CONSTRAINTS
 */
 
 
-print_constraints :: proc (constrs: []Constraint, opts: Writer_Options = {}, fd := os.stdout) {
+print_constraints :: proc (constrs: Constraints, opts: Writer_Options = {}, fd := os.stdout) {
 	w: Printer_Writer
 	_scope_handle_writer(&w, fd)
 	write_constraints(w.w, constrs, opts)
@@ -260,7 +253,7 @@ print_constraints :: proc (constrs: []Constraint, opts: Writer_Options = {}, fd 
 
 @require_results
 constraints_to_string :: proc (
-	constrs: []Constraint,
+	constrs: Constraints,
 	opts   : Writer_Options = {},
 	allocator := context.allocator,
 ) -> (s: string, err: mem.Allocator_Error) #optional_allocator_error
@@ -272,12 +265,12 @@ constraints_to_string :: proc (
 
 	return strings.to_string(b), nil
 }
-write_constraints :: proc (w: io.Writer, constrs: []Constraint, opts: Writer_Options = {})
+write_constraints :: proc (w: io.Writer, constrs: Constraints, opts: Writer_Options = {})
 {
-	for constr in constrs {
-		write_string(w, constr.var)
-		write_punct(w, ": ", opts)
-		write_atom(w, constr.atom^, opts)
+	for var, atom in constrs {
+		write_string(w, var)
+		write_operator(w, " = ", opts)
+		write_atom(w, atom^, opts)
 		write_newline(w)
 	}
 }
@@ -301,7 +294,15 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 		write_highlight(w, .Reset, opts)
 	case .Var:
 		write_string(w, atom.var)
-	case .Add, .Mul, .Div, .Pow, .Or, .Eq:
+	case .Get:
+		write_punct_token(w, .Paren_L, opts)
+		if atom.get.atom != nil {
+			write_atom(w, atom.get.atom^, opts)
+		}
+		write_punct_token(w, .Paren_R, opts)
+		write_punct(w, ".", opts)
+		write_string(w, atom.get.name)
+	case .Add, .Mul, .Div, .Pow, .Or, .Eq, .And:
 
 		// x*-1  ->  -x
 		display_neg: if atom.kind == .Mul {
@@ -327,6 +328,7 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 		case .Pow: op = .Pow
 		case .Or:  op = .Or
 		case .Eq:  op = .Eq
+		case .And: op = .And
 		}
 
 		is_deep := (atom.lhs.kind != atom.kind && atom_is_binary(atom.lhs^)) ||

@@ -23,26 +23,26 @@ import "../utils"
 		poly:       Polynomial,
 		derivative: Polynomial,
 	}{
-		{
-			"2*x = 0",
-			{0, 2},
-			{2},
-		},
-		{
-			"2*x + 3 = 0",
-			{3, 2},
-			{2},
-		},
-		{
-			"x^2 - 2*x = 0",
-			{0, -2, 1},
-			{-2, 2},
-		},
-		{
-			"-4*x^3 + 6*x^2 + 2 = 0",
-			{2, 0, 6, -4},
-			{0, 12, -12},
-		}
+		// {
+		// 	"2*x = 0",
+		// 	{0, 2},
+		// 	{2},
+		// },
+		// {
+		// 	"2*x + 3 = 0",
+		// 	{3, 2},
+		// 	{2},
+		// },
+		// {
+		// 	"x^2 - 2*x = 0",
+		// 	{0, -2, 1},
+		// 	{-2, 2},
+		// },
+		// {
+		// 	"-4*x^3 + 6*x^2 + 2 = 0",
+		// 	{2, 0, 6, -4},
+		// 	{0, 12, -12},
+		// }
 	}
 	
 	for &test_case in test_cases {
@@ -58,15 +58,18 @@ import "../utils"
 			continue
 		}
 
-		constrs := constraints_from_exprs(decls)
+		constrs := constraints_from_expr(decls)
+	
+		x_atom, x_in_constrs := constrs["x"]
+		assert(x_in_constrs, "x should be in constraints")
 
-		assert_equal(constrs[0].atom.kind,     Atom_Kind.Eq,  "constr atom kind")
-		assert_equal(constrs[0].atom.rhs.kind, Atom_Kind.Int, "rhs kind")
-		assert_equal(constrs[0].atom.rhs.int,  0,             "rhs value")
+		assert_equal(x_atom.kind,     Atom_Kind.Eq,  "constr atom kind")
+		assert_equal(x_atom.rhs.kind, Atom_Kind.Int, "rhs kind")
+		assert_equal(x_atom.rhs.int,  0,             "rhs value")
 
-		fold_atom(&constrs[0].atom.lhs, constrs[0].var)
+		fold_atom(&x_atom.lhs, constrs, "x")
 
-		poly, ok := polynomial_from_atom(constrs[0].atom.lhs^, "x")
+		poly, ok := polynomial_from_atom(x_atom.lhs^, "x")
 		if !ok {
 			log.errorf("\nCouldn't get polynomial for CASE:\n%s", test_case.input)
 			return

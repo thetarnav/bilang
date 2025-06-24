@@ -22,6 +22,7 @@ Token_Kind :: enum u8 {
 	Div,           // /
 	Pow,           // ^
 	Or,            // |
+	And,           // &
 	Gt,            // >
 	Lt,            // <
 	// Scalars
@@ -125,6 +126,7 @@ next_token :: proc "contextless" (t: ^Tokenizer) -> (token: Token, in_file: bool
 	case '/': return make_token(t, .Div), true
 	case '^': return make_token(t, .Pow), true
 	case '|': return make_token(t, .Or), true
+	case '&': return make_token(t, .And), true
 	case '>': return make_token(t, .Gt), true
 	case '<': return make_token(t, .Lt), true
 	// Str
@@ -264,7 +266,7 @@ token_pos :: proc (src: string, token: Token) -> int
 	src_ptr := uintptr(raw_data(src))
 	tok_ptr := uintptr(raw_data(token.text))
 	tok_pos := int(tok_ptr-src_ptr)
-	assert(0 <= tok_pos && tok_pos < len(src))
+	assert(0 <= tok_pos && tok_pos <= len(src))
 	return tok_pos
 }
 

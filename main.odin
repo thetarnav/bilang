@@ -59,7 +59,7 @@ main :: proc ()
 
 	bilang.print_exprs(decls)
 
-	constrs, solved, ok := bilang.resolve(bilang.constraints_from_exprs(decls))
+	constrs, solved, ok := bilang.resolve(bilang.constraints_from_expr(decls))
 
 	fmt.print("\n-------\n\n")
 	bilang.print_constraints(constrs)

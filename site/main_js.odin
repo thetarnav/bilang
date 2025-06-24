@@ -52,7 +52,7 @@ main :: proc () {} // entry point is required to initialize global vars
 		return
 	}
 
-	constrs := bilang.constraints_from_exprs(decls)
+	constrs := bilang.constraints_from_expr(decls)
 	bilang.solve(constrs)
 
 	constrs_str, alloc_err := bilang.constraints_to_string(constrs)

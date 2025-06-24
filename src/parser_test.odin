@@ -1,6 +1,7 @@
 package bilang
 
 import "core:strings"
+import "core:io"
 import "core:mem"
 import "core:log"
 import test "core:testing"
@@ -13,17 +14,17 @@ import test "core:testing"
 		{
 			"a + b * c + d * e = 0",
 
-			"((a + (b * c)) + (d * e)) = 0\n",
+			"(a + (b * c)) + (d * e) = 0\n",
 		},
 		{
 			"a * b + c * d + e = 0",
 
-			"(((a * b) + (c * d)) + e) = 0\n",
+			"((a * b) + (c * d)) + e = 0\n",
 		},
 		{
 			"(n * 2 + 10) / (n + 1) = 3",
 
-			"(((n * 2) + 10) / (n + 1)) = 3\n",
+			"((n * 2) + 10) / (n + 1) = 3\n",
 		},
 		{
 			"\n"+
@@ -31,39 +32,44 @@ import test "core:testing"
 			"a + b = c * 4 + -20"+"\n"+
 			"a - b = 10 * (5 + 15) / 2"+"\n",
 
-			"a = ((- 69.5) + 2)"+"\n"+
-			"(a + b) = ((c * 4) + (- 20))"+"\n"+
-			"(a - b) = ((10 * (5 + 15)) / 2)"+"\n",
+			"a = (- 69.5) + 2"+"\n"+
+			"a + b = (c * 4) + (- 20)"+"\n"+
+			"a - b = (10 * (5 + 15)) / 2"+"\n",
 		},
 		{
 			"a = 1 / 2 / 4\n",
 
-			"a = ((1 / 2) / 4)\n",
+			"a = (1 / 2) / 4\n",
 		},
 		{
 			"a = 1 + 2 / 4 * 6 / 8\n",
 
-			"a = (1 + (((2 / 4) * 6) / 8))\n",
+			"a = 1 + (((2 / 4) * 6) / 8)\n",
 		},
 		{
 			"a = 0 * 1 + 2^3 * 4 + 5\n",
 
-			"a = (((0 * 1) + ((2 ^ 3) * 4)) + 5)\n",
+			"a = ((0 * 1) + ((2 ^ 3) * 4)) + 5\n",
 		},
 		{
 			"a = 2^3^4\n",
 
-			"a = (2 ^ (3 ^ 4))\n",
+			"a = 2 ^ (3 ^ 4)\n",
 		},
 		{
 			"-4*x^3 + 6*x^2 + 2 = 0",
 
-			"((((- 4) * (x ^ 3)) + (6 * (x ^ 2))) + 2) = 0\n",
+			"(((- 4) * (x ^ 3)) + (6 * (x ^ 2))) + 2 = 0\n",
 		},
 		{
 			"x = 1 | 2",
 
-			"x = (1 | 2)\n",
+			"x = 1 | 2\n",
+		},
+		{
+			"x = 1 & 2",
+
+			"x = 1 & 2\n",
 		},
 	}
 
@@ -81,7 +87,7 @@ import test "core:testing"
 		defer free_all(case_allocator)
 
 		
-		exprs, err := parse_src(test_case.input)
+		expr, err := parse_src(test_case.input)
 	
 		if err != nil {
 			log.errorf(
@@ -94,15 +100,17 @@ import test "core:testing"
 		b := strings.builder_make_len_cap(0, 1024)
 		w := strings.to_writer(&b)
 	
-		write_exprs(w, exprs)
-	
+		write_expr(w, expr)
+		io.write_rune(w, '\n')
+
 		output := strings.to_string(b)
 
 		if output != test_case.solve {
 
 			strings.builder_reset(&b) // makes output unusable !!!
 
-			write_exprs(w, exprs, {highlight=true})
+			write_expr(w, expr, {highlight=true})
+			io.write_rune(w, '\n')
 			output_pretty := strings.clone(strings.to_string(b))
 
 			log.errorf(
