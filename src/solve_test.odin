@@ -81,7 +81,10 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 
 		strings.write_string(&b, "\nTRANSFORMATION HISTORY:\n")
 		for var, atom in constrs {
-			strings.write_string(&b, fmt.aprintf("%s: ", var))
+			strings.write_string(&b, var)
+			write_highlight(w, .Op, {highlight=true})
+			strings.write_string(&b, " = ")
+			write_highlight(w, .Reset, {highlight=true})
 			write_atom_transformations(w, atom^, {highlight=true})
 			strings.write_string(&b, "\n")
 		}

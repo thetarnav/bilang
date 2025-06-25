@@ -386,7 +386,7 @@ write_atom_transformations :: proc (w: io.Writer, atom: Atom, opts: Writer_Optio
 		
 		if i > 0 {
 			write_highlight(w, .Punct, opts)
-			write_string(w, "\n-> ")
+			write_string(w, "\n -> ")
 			write_highlight(w, .Reset, opts)
 		}
 	}
