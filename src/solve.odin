@@ -881,9 +881,18 @@ fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated:
 				return atom_new({kind = .None}, from=get), true
 			}
 		case .Var:
+			// Avoid infinite substitution loop
+			if var == atom^.var do break
+			
 			// Try substituting the var from constraints
-			if constr, var_in_constrs := constrs[var]; var_in_constrs {
-				if res, ok := find_substitution(constr, var); ok {
+			if constr, var_in_constrs := constrs[atom^.var]; var_in_constrs {
+
+				// if !has_dependency(constr^, atom^.var) {
+				// 	atom^ = constr
+				// 	run_updated = true
+				// }
+
+				if res, ok := find_substitution(constr, atom^.var); ok {
 					atom^ = res
 					run_updated = true
 				}
@@ -897,7 +906,7 @@ fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated:
 						res, ok = find_substitution(atom.rhs, var)
 						return
 					}
-					return atom, has_dependency(atom^, var)
+					return atom, !has_dependency(atom^, var)
 				}
 			}
 		case .Int, .Float, .Str, .None:
