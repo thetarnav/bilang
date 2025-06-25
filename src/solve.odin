@@ -72,28 +72,27 @@ atom_int :: proc (val: int, from: ^Atom = nil, loc := #caller_location) -> ^Atom
 	case:    return atom_new({kind=.Int, int=val}, from, loc)
 	}
 }
-
 @require_results
 atom_float :: proc (val: f64, from: ^Atom = nil, loc := #caller_location) -> ^Atom {
 	return atom_new({kind=.Float, float=val}, from, loc)
 }
-
+atom_num :: proc {atom_int, atom_float}
 @require_results
 atom_str :: proc (val: string, from: ^Atom = nil, loc := #caller_location) -> ^Atom {
 	return atom_new({kind=.Str, var=val}, from, loc)
 }
-
 @require_results
 atom_var :: proc (var: string, from: ^Atom = nil, loc := #caller_location) -> ^Atom {
 	return atom_new({kind=.Var, var=var}, from, loc)
 }
-
 @require_results
 atom_bin :: proc (kind: Atom_Kind, lhs, rhs: ^Atom, from: ^Atom = nil, loc := #caller_location) -> ^Atom {
 	return atom_new({kind=kind, lhs=lhs, rhs=rhs}, from, loc)
 }
-
-atom_num :: proc {atom_int, atom_float}
+@require_results
+atom_get :: proc (atom: ^Atom, name: string, from: ^Atom = nil, loc := #caller_location) -> ^Atom {
+	return atom_new({kind=.Get, get={atom=atom, name=name}}, from, loc)
+}
 
 @require_results atom_is_binary :: proc (atom: Atom) -> bool {return atom.kind in ATOM_BINARY_KINDS}
 @require_results atom_is_num    :: proc (atom: Atom) -> bool {return atom.kind in ATOM_NUM_KINDS}
@@ -832,29 +831,41 @@ fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated:
 			// Try folding the get atom
 			fold_updated := fold_atom(&get_atom, constrs, var)
 
-			// Try getting the value of the var
-			// `(a = x).a`  ->  `x`
-			if get_atom.kind == .Eq {
-				if atom_val_equals(get_atom.lhs^, var) {
-					atom^ = get_atom.rhs
-					run_updated = true
-					break
+			// Try getting the value of the var using recursive search
+			if found_atom, ok := find_value_for_var(get_atom, atom^.get.name); ok {
+				atom^ = found_atom
+				run_updated = true
+				break
+			}
+
+			find_value_for_var :: proc (atom: ^Atom, var: string) -> (result: ^Atom, changed: bool) {
+				#partial switch atom.kind {
+				// ((a = x) & y).a  ->  x & (y).a
+				case .And:
+					lhs, lhs_ok := find_value_for_var(atom.lhs, var)
+					rhs, rhs_ok := find_value_for_var(atom.rhs, var)
+					if lhs_ok || rhs_ok {
+						return atom_bin(.And, lhs, rhs, from=atom), true
+					}
+				// (a = x).a  ->  x
+				case .Eq:
+					if atom_val_equals(atom.lhs^, var) {
+						return atom.rhs, true
+					}
+					if atom_val_equals(atom.rhs^, var) {
+						return atom.lhs, true
+					}
 				}
-				if atom_val_equals(get_atom.rhs^, var) {
-					atom^ = get_atom.lhs
-					run_updated = true
-					break
+				// (a * 2 = x).a (not resolved)
+				if has_dependency(atom^, var) {
+					return atom, false
 				}
+				// (123).a  ->  ()
+				return atom_new({kind = .None}, from=atom), true
 			}
 
 			if fold_updated {
-				atom^ = atom_new({
-					kind = .Get,
-					get  = {
-						name = atom^.get.name,
-						atom = get_atom,
-					},
-				})
+				atom^ = atom_get(get_atom, atom^.get.name, from=atom^)
 				run_updated = true
 			}
 		case .Var:
@@ -957,8 +968,8 @@ constraints_from_expr :: proc (expr: Expr, allocator := context.allocator) -> Co
 		Add constr for each var in atom
 		and exclude vars that are already in constrs
 	*/
-	_visit(atom, atom^, &constrs)
-	_visit :: proc (atom: ^Atom, root_atom: Atom, constrs: ^Constraints)
+	_visit(atom, atom, &constrs)
+	_visit :: proc (atom: ^Atom, root_atom: ^Atom, constrs: ^Constraints)
 	{
 		switch atom.kind {
 		case .Int, .Float, .Str:
@@ -966,16 +977,11 @@ constraints_from_expr :: proc (expr: Expr, allocator := context.allocator) -> Co
 			return
 		case .Var:
 			if atom.var not_in constrs {
-				constrs[atom.var] = atom_new({
-					kind = .Get,
-					get  = {
-						name = atom.var,
-						atom = atom_new(root_atom),
-					},
-				})
+				constrs[atom.var] = atom_get(root_atom, atom.var)
 			}
 		case .None: unimplemented("none expressions are not supported")
-		case .Get:  unimplemented("get expressions are not supported")
+		case .Get:
+			unimplemented("get expressions are not supported")
 		case .Add, .Mul, .Div, .Pow, .Eq, .Or, .And:
 			_visit(atom.lhs, root_atom, constrs)
 			_visit(atom.rhs, root_atom, constrs)
@@ -1034,11 +1040,10 @@ try_finding_polynomial_solution :: proc (atom: ^^Atom, var: string, constrs: Con
 
 	root, found := find_polynomial_root(poly)
 	if found {
-		atom^ = atom_new({
-			kind = .Eq,
-			lhs  = atom_var(var, sub^.lhs),
-			rhs  = atom_num(root, sub^.rhs),
-		})
+		atom^ = atom_bin(.Eq,
+			atom_var(var, sub^.lhs),
+			atom_num(root, sub^.rhs),
+		)
 		updated^ = true
 	}
 }
