@@ -826,47 +826,49 @@ fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated:
 				run_updated = true
 			}
 		case .Get:
-			get_atom := atom^.get.atom
-
-			// Try folding the get atom
-			fold_updated := fold_atom(&get_atom, constrs, var)
-
 			// Try getting the value of the var using recursive search
-			if found_atom, ok := find_value_for_var(get_atom, atom^.get.name); ok {
-				atom^ = found_atom
+			if res, ok := resolve_get(atom^, atom^.get.atom); ok {
+				atom^ = res
 				run_updated = true
-				break
+			} else {
+				// Try folding the inner atom
+				get_atom := atom^.get.atom
+				if fold_atom(&get_atom, constrs, var) {
+					atom^ = atom_get(get_atom, atom^.get.name, from=atom^)
+					run_updated = true
+				}
 			}
 
-			find_value_for_var :: proc (atom: ^Atom, var: string) -> (result: ^Atom, changed: bool) {
+			resolve_get :: proc (get: ^Atom, atom: ^Atom) -> (result: ^Atom, changed: bool) {
 				#partial switch atom.kind {
 				// ((a = x) & y).a  ->  x & (y).a
 				case .And:
-					lhs, lhs_ok := find_value_for_var(atom.lhs, var)
-					rhs, rhs_ok := find_value_for_var(atom.rhs, var)
+					lhs, lhs_ok := resolve_get(get, atom.lhs)
+					rhs, rhs_ok := resolve_get(get, atom.rhs)
 					if lhs_ok || rhs_ok {
-						return atom_bin(.And, lhs, rhs, from=atom), true
+						if !lhs_ok {
+							lhs = atom_get(lhs, get.get.name)
+						}
+						if !rhs_ok {
+							rhs = atom_get(rhs, get.get.name)
+						}
+						return atom_bin(.And, lhs, rhs, from=get), true
 					}
 				// (a = x).a  ->  x
 				case .Eq:
-					if atom_val_equals(atom.lhs^, var) {
+					if atom_val_equals(atom.lhs^, get.get.name) {
 						return atom.rhs, true
 					}
-					if atom_val_equals(atom.rhs^, var) {
+					if atom_val_equals(atom.rhs^, get.get.name) {
 						return atom.lhs, true
 					}
 				}
 				// (a * 2 = x).a (not resolved)
-				if has_dependency(atom^, var) {
+				if has_dependency(atom^, get.get.name) {
 					return atom, false
 				}
 				// (123).a  ->  ()
-				return atom_new({kind = .None}, from=atom), true
-			}
-
-			if fold_updated {
-				atom^ = atom_get(get_atom, atom^.get.name, from=atom^)
-				run_updated = true
+				return atom_new({kind = .None}, from=get), true
 			}
 		case .Var:
 			// Try substituting the var from constraints
