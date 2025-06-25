@@ -284,6 +284,10 @@ print_atom :: proc (atom: Atom, opts: Writer_Options = {}, fd := os.stdout)
 write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 {
 	switch atom.kind {
+	case .None:
+		write_highlight(w, .Punct, opts)
+		write_string(w, "()")
+		write_highlight(w, .Reset, opts)
 	case .Int:
 		write_int(w, atom.int, opts)
 	case .Float:

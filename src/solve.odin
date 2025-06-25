@@ -29,6 +29,7 @@ Atom :: struct {
 }
 
 Atom_Kind :: enum u8 {
+	None,
 	Int,
 	Float,
 	Str,
@@ -255,7 +256,7 @@ atom_add_if_possible :: proc (a, b: ^Atom) -> (sum: ^Atom, ok: bool)
 			if new_rhs, ok := visit_a_b(b.rhs, a); ok {
 				return atom_bin(.Add, b.lhs, new_rhs, b), true
 			}
-		case .Mul, .Pow, .Var, .Str, .Or, .Eq, .And, .Get:
+		case .Mul, .Pow, .Var, .Str, .Or, .Eq, .And, .Get, .None:
 		}
 		return
 	}
@@ -547,7 +548,7 @@ atom_div_extract_var_if_possible :: proc (atom: ^Atom, var: string) -> (res: ^At
 		} else if rhs, ok := atom_div_extract_var_if_possible(atom.rhs, var); ok {
 			return atom_mul(atom.lhs, rhs), true
 		}
-	case .Pow, .Int, .Float, .Str, .Or, .Eq, .And, .Get:
+	case .Pow, .Int, .Float, .Str, .Or, .Eq, .And, .Get, .None:
 		// skip
 	}
 
@@ -767,6 +768,7 @@ atom_equals_val :: proc (a, b: Atom) -> bool
 {
 	if a.kind == b.kind {
 		switch a.kind {
+		case .None:  return true
 		case .Int:   return a.int == b.int
 		case .Float: return a.float == b.float
 		case .Str:   return a.str == b.str
@@ -811,7 +813,7 @@ fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated:
 			case .Eq:  res, bin_updated = atom_eq_if_possible(lhs, rhs, var)
 			case .Or:  res, bin_updated = atom_or_if_possible(lhs, rhs)
 			case .And: // skip
-			case .Int, .Float, .Str, .Var, .Get: unreachable()
+			case .Int, .Float, .Str, .Var, .Get, .None: unreachable()
 			}
 		
 			if bin_updated {
@@ -875,7 +877,7 @@ fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated:
 					return atom, has_dependency(atom^, var)
 				}
 			}
-		case .Int, .Float, .Str:
+		case .Int, .Float, .Str, .None:
 			// constants and vars are not foldable
 		}
 
@@ -972,8 +974,8 @@ constraints_from_expr :: proc (expr: Expr, allocator := context.allocator) -> Co
 					},
 				})
 			}
-		case .Get:
-			unimplemented("get expressions are not supported")
+		case .None: unimplemented("none expressions are not supported")
+		case .Get:  unimplemented("get expressions are not supported")
 		case .Add, .Mul, .Div, .Pow, .Eq, .Or, .And:
 			_visit(atom.lhs, root_atom, constrs)
 			_visit(atom.rhs, root_atom, constrs)
