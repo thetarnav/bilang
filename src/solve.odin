@@ -53,7 +53,7 @@ Constraints :: map[string]^Atom
 atom_new :: proc (atom: Atom, from: ^Atom = nil, loc := #caller_location) -> ^Atom {
 	atom := atom
 	atom.from = from
-	a, err := new_val(Atom, atom, loc=loc)
+	a, err := new_val(atom, loc=loc)
 	// TODO: setup a separate allocator for errors
 	utils.alloc_error_assert("atom_new error: ", err, loc)
 	return a

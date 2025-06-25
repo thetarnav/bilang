@@ -11,8 +11,7 @@ is_int       :: utils.is_int
 
 @require_results
 new_val :: proc (
-	$T: typeid,
-	val: T,
+	val: $T,
 	allocator := context.allocator,
 	loc := #caller_location,
 ) -> (ptr: ^T, err: runtime.Allocator_Error) #optional_allocator_error {
