@@ -811,7 +811,17 @@ fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated:
 			case .Pow: res, bin_updated = atom_pow_if_possible(lhs, rhs)
 			case .Eq:  res, bin_updated = atom_eq_if_possible(lhs, rhs, var)
 			case .Or:  res, bin_updated = atom_or_if_possible(lhs, rhs)
-			case .And: // skip
+			case .And:
+				//   () & x  ->  x
+				if lhs.kind == .None {
+					res, bin_updated = atom_new(rhs^, from=atom^), true
+				} // x & ()  ->  x
+				else if rhs.kind == .None {
+					res, bin_updated = atom_new(lhs^, from=atom^), true
+				} // x & x  ->  x
+				else if atom_equals(lhs, rhs) {
+					res, bin_updated = atom_new(lhs^, from=atom^), true
+				}
 			case .Int, .Float, .Str, .Var, .Get, .None: unreachable()
 			}
 		
