@@ -734,8 +734,10 @@ atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var: string, from: ^Atom = nil) ->
 		return res, true
 	}
 
-	// x = x  ->  ()
-	if atom_equals(lhs^, rhs^) {
+	// () = x   ->  ()
+	// x  = ()  ->  ()
+	// x  = x   ->  ()
+	if lhs.kind == .None || rhs.kind == .None || atom_equals(lhs, rhs) {
 		return atom_new({kind=.None}, from=from), true
 	}
 
