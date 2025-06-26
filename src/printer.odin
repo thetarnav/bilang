@@ -267,9 +267,7 @@ constraints_to_string :: proc (
 }
 write_constraints :: proc (w: io.Writer, constrs: Constraints, opts: Writer_Options = {})
 {
-	for var, atom in constrs {
-		write_string(w, var)
-		write_operator(w, " = ", opts)
+	for _, atom in constrs {
 		write_atom(w, atom^, opts)
 		write_newline(w)
 	}
@@ -386,7 +384,7 @@ write_atom_transformations :: proc (w: io.Writer, atom: Atom, opts: Writer_Optio
 		
 		if i > 0 {
 			write_highlight(w, .Punct, opts)
-			write_string(w, "\n -> ")
+			write_string(w, "\n-> ")
 			write_highlight(w, .Reset, opts)
 		}
 	}

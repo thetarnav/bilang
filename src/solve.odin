@@ -148,36 +148,38 @@ atom_copy :: proc (src: Atom, loc := #caller_location) -> (dst: Atom)
 }
 
 @require_results
-atom_add_if_possible :: proc (a, b: ^Atom) -> (sum: ^Atom, ok: bool)
+atom_add_if_possible :: proc (a, b: ^Atom, from: ^Atom = nil) -> (sum: ^Atom, ok: bool)
 {
-	return visit_a_b(a, b)
+	return visit_a_b(a, b, from)
 
-	visit_a_b :: proc (a, b: ^Atom) -> (res: ^Atom, ok: bool)
+	visit_a_b :: proc (a, b: ^Atom, from: ^Atom) -> (res: ^Atom, ok: bool)
 	{
-		// Check for distribution over or expressions first
-		if result, distributed := distribute_over_or(.Add, a, b); distributed {
-			return result, true
+		if res, ok := distribute_over_or(.Add, a, b, from=from); ok {
+			return res, true
+		}
+		if res, ok := distribute_over_and(.Add, b, a, from=from); ok {
+			return res, true
 		}
 		
 		// 1 + 2  ->  3
 		if a.kind == .Int && b.kind == .Int {
-			return atom_num(a.int+b.int, a), true
+			return atom_num(a.int+b.int, from=from), true
 		}
 		else if a.kind == .Float && b.kind == .Float {
-			return atom_num(a.float+b.float, a), true
+			return atom_num(a.float+b.float, from=from), true
 		}
 		else if a.kind == .Int && b.kind == .Float {
-			return atom_num(f64(a.int)+b.float, a), true
+			return atom_num(f64(a.int)+b.float, from=from), true
 		}
 		else if a.kind == .Float && b.kind == .Int {
-			return atom_num(a.float+f64(b.int), a), true
+			return atom_num(a.float+f64(b.int), from=from), true
 		}
 
 		// "foo" + "bar"  ->  "foobar"
 		if a.kind == .Str && b.kind == .Str {
 			return atom_str(
 				strings.concatenate({a.str, b.str}),
-				a,
+				from=from,
 			), true
 		}
  
@@ -248,11 +250,11 @@ atom_add_if_possible :: proc (a, b: ^Atom) -> (sum: ^Atom, ok: bool)
 			}
 		case .Add:
 			// (x + y) + x  ->  2x + y
-			if new_lhs, ok := visit_a_b(b.lhs, a); ok {
+			if new_lhs, ok := visit_a_b(b.lhs, a, b); ok {
 				return atom_bin(.Add, new_lhs, b.rhs, b), true
 			}
 			// (y + x) + x  ->  y + 2x
-			if new_rhs, ok := visit_a_b(b.rhs, a); ok {
+			if new_rhs, ok := visit_a_b(b.rhs, a, b); ok {
 				return atom_bin(.Add, b.lhs, new_rhs, b), true
 			}
 		case .Mul, .Pow, .Var, .Str, .Or, .Eq, .And, .Get, .None:
@@ -280,9 +282,11 @@ atom_mul_if_possible :: proc (a, b: ^Atom) -> (product: ^Atom, ok: bool)
 
 	visit_a_b :: proc (a, b: ^Atom) -> (res: ^Atom, ok: bool)
 	{
-		// Check for distribution over or expressions first
-		if result, distributed := distribute_over_or(.Mul, a, b); distributed {
-			return result, true
+		if res, ok := distribute_over_or(.Mul, a, b); ok {
+			return res, true
+		}
+		if res, ok := distribute_over_and(.Mul, b, a); ok {
+			return res, true
 		}
 		
 		// 2 * 3  ->  6
@@ -399,11 +403,13 @@ atom_neg :: proc (atom: ^Atom, loc := #caller_location) -> ^Atom {
 }
 
 @require_results
-atom_div_if_possible :: proc (dividened, divisor: ^Atom) -> (quotient: ^Atom, ok: bool)
+atom_div_if_possible :: proc (dividened, divisor: ^Atom) -> (^Atom, bool)
 {
-	// Check for distribution over or expressions first
-	if result, distributed := distribute_over_or(.Div, dividened, divisor); distributed {
-		return result, true
+	if res, ok := distribute_over_or(.Div, dividened, divisor); ok {
+		return res, true
+	}
+	if res, ok := distribute_over_and(.Div, divisor, dividened); ok {
+		return res, true
 	}
 	
 	// 0/x  ->  0
@@ -556,34 +562,49 @@ atom_div_extract_var_if_possible :: proc (atom: ^Atom, var: string) -> (res: ^At
 
 @require_results
 has_dependencies :: proc (atom: Atom) -> bool {
-	if atom_is_binary(atom) {
+	switch (atom.kind) {
+	case .Var: return true
+	case .Int, .Float, .Str, .None: return false
+	case .Get: return true // ? Get always has dependencies
+	case .Add, .Div, .Mul, .Pow, .Or, .And, .Eq:
 		return has_dependencies(atom.lhs^) ||
 		       has_dependencies(atom.rhs^)
+	case: return false
 	}
-	return atom.kind == .Var
 }
 @require_results
 has_dependency :: proc (atom: Atom, var: string) -> bool {
-	if atom_is_binary(atom) {
+	switch (atom.kind) {
+	case .Var: return atom.var == var
+	case .Int, .Float, .Str, .None: return false
+	case .Get: return atom.get.name == var || has_dependency(atom.get.atom^, var)
+	case .Add, .Div, .Mul, .Pow, .Or, .And, .Eq:
 		return has_dependency(atom.lhs^, var) ||
 		       has_dependency(atom.rhs^, var)
+	case: return false
 	}
-	return atom.kind == .Var && atom.var == var
 }
 @require_results
 has_dependency_other_than_var :: proc (atom: Atom, var: string) -> bool {
-	if atom_is_binary(atom) {
+	switch (atom.kind) {
+	case .Var: return atom.var != var
+	case .Int, .Float, .Str, .None: return false
+	case .Get: return atom.get.name != var && has_dependency_other_than_var(atom.get.atom^, var)
+	case .Add, .Div, .Mul, .Pow, .Or, .And, .Eq:
 		return has_dependency_other_than_var(atom.lhs^, var) ||
 		       has_dependency_other_than_var(atom.rhs^, var)
+	case: return false
 	}
-	return atom.kind == .Var && atom.var != var
 }
 
 @require_results
-atom_pow_if_possible :: proc (base, exponent: ^Atom) -> (pow: ^Atom, ok: bool) {
-	// Check for distribution over or expressions first
-	if result, distributed := distribute_over_or(.Pow, base, exponent); distributed {
-		return result, true
+atom_pow_if_possible :: proc (base, exponent: ^Atom) -> (^Atom, bool) {
+
+	if res, ok := distribute_over_or(.Pow, base, exponent); ok {
+		return res, true
+	}
+	if res, ok := distribute_over_and(.Pow, exponent, base); ok {
+		return res, true
 	}
 
 	// 2^0  ->  1
@@ -612,7 +633,7 @@ atom_pow_if_possible :: proc (base, exponent: ^Atom) -> (pow: ^Atom, ok: bool) {
 		return atom_num(math.pow(f64(base.int), exponent.float), base), true
 	}
 
-	return
+	return nil, false
 }
 @require_results
 atom_pow_atom :: proc (base, exponent: ^Atom) -> ^Atom {
@@ -641,30 +662,66 @@ atom_or :: proc (a, b: ^Atom, loc := #caller_location) -> ^Atom {
 	return atom_or_if_possible(a, b) or_else atom_bin(.Or, a, b, a, loc)
 }
 
-// Helper function to distribute operations over or expressions
 @require_results
-distribute_over_or :: proc (op_kind: Atom_Kind, a, b: ^Atom) -> (result: ^Atom, ok: bool)
+distribute_over_or :: proc (op_kind: Atom_Kind, a, b: ^Atom, from: ^Atom = nil) -> (^Atom, bool)
 {
 	// If 'a' is an or expression: (x | y) op b -> (x op b) | (y op b)
 	if a.kind == .Or {
-		return atom_or(
-			atom_bin(op_kind, a.lhs, b, a),
-			atom_bin(op_kind, a.rhs, b, a),
+		return atom_bin(.Or,
+			atom_bin(op_kind, a.lhs, b),
+			atom_bin(op_kind, a.rhs, b),
+			from=from,
 		), true
 	}
 	// If 'b' is an or expression: a op (x | y) -> (a op x) | (a op y)
 	if b.kind == .Or {
-		return atom_or(
-			atom_bin(op_kind, a, b.lhs, b),
-			atom_bin(op_kind, a, b.rhs, b),
+		return atom_bin(.Or,
+			atom_bin(op_kind, a, b.lhs),
+			atom_bin(op_kind, a, b.rhs),
+			from=from,
 		), true
 	}
 	
-	return
+	return nil, false
+}
+@require_results
+distribute_over_and :: proc (op_kind: Atom_Kind, a, b: ^Atom, from: ^Atom = nil) -> (^Atom, bool)
+{
+	// If 'a' is an and expression: (x & y) op b -> (x op b) & (y op b)
+	if a.kind == .And {
+		return atom_bin(.And,
+			atom_bin(op_kind, a.lhs, b),
+			atom_bin(op_kind, a.rhs, b),
+			from=from,
+		), true
+	}
+	// If 'b' is an and expression: a op (x & y) -> (a op x) & (a op y)
+	if b.kind == .And {
+		return atom_bin(.And,
+			atom_bin(op_kind, a, b.lhs),
+			atom_bin(op_kind, a, b.rhs),
+			from=from,
+		), true
+	}
+	
+	return nil, false
 }
 
-atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var: string) -> (eq: ^Atom, updated: bool)
+atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var: string, from: ^Atom = nil) -> (eq: ^Atom, updated: bool)
 {
+	if res, ok := distribute_over_or(.Eq, lhs, rhs, from=from); ok {
+		return res, true
+	}
+	if res, ok := distribute_over_and(.Eq, rhs, lhs, from=from); ok {
+		return res, true
+	}
+
+	// x = x  ->  ()
+	if atom_equals(lhs^, rhs^) {
+		return atom_new({kind=.None}, from=from), true
+	}
+
+	eq = from
 	lhs, rhs := lhs, rhs
 
 	/*
@@ -755,7 +812,7 @@ atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var: string) -> (eq: ^Atom, update
 	}
 
 	if updated {
-		eq = atom_bin(.Eq, lhs, rhs, lhs)
+		eq = atom_bin(.Eq, lhs, rhs, from=from)
 	}
 
 	return
@@ -809,7 +866,7 @@ fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated:
 			case .Mul: res, bin_updated = atom_mul_if_possible(lhs, rhs)
 			case .Div: res, bin_updated = atom_div_if_possible(lhs, rhs)
 			case .Pow: res, bin_updated = atom_pow_if_possible(lhs, rhs)
-			case .Eq:  res, bin_updated = atom_eq_if_possible(lhs, rhs, var)
+			case .Eq:  res, bin_updated = atom_eq_if_possible(lhs, rhs, var, from=atom^)
 			case .Or:  res, bin_updated = atom_or_if_possible(lhs, rhs)
 			case .And:
 				//   () & x  ->  x
@@ -881,33 +938,35 @@ fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated:
 				return atom_new({kind = .None}, from=get), true
 			}
 		case .Var:
-			// Avoid infinite substitution loop
-			if var == atom^.var do break
-			
 			// Try substituting the var from constraints
-			if constr, var_in_constrs := constrs[atom^.var]; var_in_constrs {
+			if var == atom^.var do break
+			constr := constrs[atom^.var] or_break
+			if constr.kind != .Eq do break
 
-				// if !has_dependency(constr^, atom^.var) {
-				// 	atom^ = constr
-				// 	run_updated = true
-				// }
+			val: ^Atom
+			if atom_val_equals(constr.lhs^, atom^.var) {
+				val = constr.rhs
+			} else if atom_val_equals(constr.rhs^, atom^.var) {
+				val = constr.lhs
+			} else {
+				break
+			}
 
-				if res, ok := find_substitution(constr, atom^.var); ok {
-					atom^ = res
-					run_updated = true
+			if res, ok := find_substitution(val, atom^.var); ok {
+				atom^ = atom_new(res^, from=atom^)
+				run_updated = true
+			}
+			
+			// for x: `3 & (x + 2)` -> `3`
+			find_substitution :: proc (atom: ^Atom, var: string) -> (res: ^Atom, ok: bool)
+			{
+				if atom.kind == .And {
+					res, ok = find_substitution(atom.lhs, var)
+					if ok do return
+					res, ok = find_substitution(atom.rhs, var)
+					return
 				}
-				
-				// for x: `3 & (x + 2)` -> `3`
-				find_substitution :: proc (atom: ^Atom, var: string) -> (res: ^Atom, ok: bool)
-				{
-					if atom.kind == .And {
-						res, ok = find_substitution(atom.lhs, var)
-						if ok do return
-						res, ok = find_substitution(atom.rhs, var)
-						return
-					}
-					return atom, !has_dependency(atom^, var)
-				}
+				return atom, !has_dependency(atom^, var)
 			}
 		case .Int, .Float, .Str, .None:
 			// constants and vars are not foldable
@@ -998,7 +1057,9 @@ constraints_from_expr :: proc (expr: Expr, allocator := context.allocator) -> Co
 			return
 		case .Var:
 			if atom.var not_in constrs {
-				constrs[atom.var] = atom_get(root_atom, atom.var)
+				constrs[atom.var] = atom_bin(.Eq,
+					atom_var(atom.var),
+					atom_get(root_atom, atom.var))
 			}
 		case .None: unimplemented("none expressions are not supported")
 		case .Get:
@@ -1026,15 +1087,15 @@ solve :: proc (constrs: Constraints, allocator := context.allocator)
 
 		if updated do continue
 
-		for var, &atom in constrs {
+		// for var, &atom in constrs {
 			
-			// try approximation
-			try_finding_polynomial_solution(&atom, var, constrs, &updated)
+		// 	// try approximation
+		// 	try_finding_polynomial_solution(&atom, var, constrs, &updated)
 
-			if updated {
-				continue solve_loop
-			}
-		}
+		// 	if updated {
+		// 		continue solve_loop
+		// 	}
+		// }
 		
 		break
 	}
