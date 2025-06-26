@@ -49,6 +49,24 @@ ATOM_BINARY_KINDS :: bit_set[Atom_Kind]{.Add, .Div, .Mul, .Pow, .Or, .And, .Eq}
 
 Constraints :: map[string]^Atom
 
+atom_kind_to_token_kind :: proc (kind: Atom_Kind) -> Token_Kind {
+	switch kind {
+	case .Int:   return .Int
+	case .Float: return .Float
+	case .Str:   return .Str
+	case .Var:   return .Ident
+	case .Add:   return .Add
+	case .Mul:   return .Mul
+	case .Div:   return .Div
+	case .Pow:   return .Pow
+	case .Or:    return .Or
+	case .And:   return .And
+	case .Eq:    return .Eq
+	case .Get, .None: fallthrough
+	case:        return .Invalid
+	}
+}
+
 @require_results
 atom_new :: proc (atom: Atom, from: ^Atom = nil, loc := #caller_location) -> ^Atom {
 	atom := atom

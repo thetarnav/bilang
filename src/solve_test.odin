@@ -127,12 +127,12 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 		"y = 1\n",
 	)
 
-	// solve_test_case(t,
-	// 	"a + b = 10\n"+
-	// 	"a = -4 + 2",
-	// 	"a: a = -2\n"+
-	// 	"b: b = 12\n",	
-	// )
+	solve_test_case(t,
+		"a + b = 10\n"+
+		"a = -4 + 2",
+		"a = -2\n"+
+		"b = 12\n",	
+	)
 
 	// solve_test_case(t,
 	// 	"y = a * x + b\n"+

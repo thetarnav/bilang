@@ -30,7 +30,7 @@ _scope_handle_writer_flush :: proc (w: ^Printer_Writer, _: os.Handle)
 
 Writer_Options :: struct {
 	highlight: bool,
-	parens: bool,
+	parens:    bool,
 }
 
 write_string :: io.write_string
@@ -268,7 +268,7 @@ constraints_to_string :: proc (
 write_constraints :: proc (w: io.Writer, constrs: Constraints, opts: Writer_Options = {})
 {
 	for _, atom in constrs {
-		write_atom(w, atom^, opts)
+		write_atom(w, atom^, .None, opts)
 		write_newline(w)
 	}
 }
@@ -277,9 +277,9 @@ print_atom :: proc (atom: Atom, opts: Writer_Options = {}, fd := os.stdout)
 {
 	w: Printer_Writer
 	_scope_handle_writer(&w, fd)
-	write_atom(w.w, atom, opts)
+	write_atom(w.w, atom, .None, opts)
 }
-write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
+write_atom :: proc (w: io.Writer, atom: Atom, parent_kind: Atom_Kind = .None, opts: Writer_Options = {})
 {
 	switch atom.kind {
 	case .None:
@@ -299,7 +299,7 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 	case .Get:
 		write_punct_token(w, .Paren_L, opts)
 		if atom.get.atom != nil {
-			write_atom(w, atom.get.atom^, opts)
+			write_atom(w, atom.get.atom^, .Get, opts)
 		}
 		write_punct_token(w, .Paren_R, opts)
 		write_punct(w, ".", opts)
@@ -318,35 +318,31 @@ write_atom :: proc (w: io.Writer, atom: Atom, opts: Writer_Options = {})
 			}
 
 			write_operator_token(w, .Sub, opts)
-			write_atom(w, val^, opts)
+			write_atom(w, val^, .Mul, opts)
 			return
 		}
 
-		op: Token_Kind
-		#partial switch atom.kind {
-		case .Add: op = .Add
-		case .Mul: op = .Mul 
-		case .Div: op = .Div
-		case .Pow: op = .Pow
-		case .Or:  op = .Or
-		case .Eq:  op = .Eq
-		case .And: op = .And
-		}
+		op := atom_kind_to_token_kind(atom.kind)
 
-		is_deep := (atom.lhs.kind != atom.kind && atom_is_binary(atom.lhs^)) ||
-		           (atom.rhs.kind != atom.kind && atom_is_binary(atom.rhs^))
-		
+		space := parent_kind == .None ||
+		         (atom.lhs.kind != atom.kind && atom_is_binary(atom.lhs^)) ||
+		         (atom.rhs.kind != atom.kind && atom_is_binary(atom.rhs^))
+
+		parens := opts.parens || token_kind_precedence(op) < token_kind_precedence(atom_kind_to_token_kind(parent_kind))
+
+		opts := opts
+		opts.parens = opts.parens || parens
+
 		child_opts := opts
-		child_opts.parens = atom.kind != .Eq &&
-		                    (atom.lhs.kind != atom.kind || (atom.kind != .Mul && atom.kind != .Add))
+		child_opts.parens = false
 
-		if is_deep do write_paren(w, .Paren_L, opts)
-		write_atom(w, atom.lhs^, child_opts)
-		if is_deep || atom.kind == .Eq do write_space(w)
+		write_paren(w, .Paren_L, opts)
+		write_atom(w, atom.lhs^, atom.kind, child_opts)
+		if space do write_space(w)
 		write_operator_token(w, op, opts)
-		if is_deep || atom.kind == .Eq do write_space(w)
-		write_atom(w, atom.rhs^, child_opts)
-		if is_deep do write_paren(w, .Paren_R, opts)
+		if space do write_space(w)
+		write_atom(w, atom.rhs^, atom.kind, child_opts)
+		write_paren(w, .Paren_R, opts)
 	}
 }
 
@@ -380,7 +376,7 @@ write_atom_transformations :: proc (w: io.Writer, atom: Atom, opts: Writer_Optio
 	}
 
 	#reverse for step, i in transformations {
-		write_atom(w, step, opts)
+		write_atom(w, step, .None, opts)
 		
 		if i > 0 {
 			write_highlight(w, .Punct, opts)

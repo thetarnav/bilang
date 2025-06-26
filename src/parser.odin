@@ -72,10 +72,8 @@ Parser :: struct {
 @require_results token_is_binary :: proc (token: Token) -> bool {return precedence_table[token.kind] > 0}
 @require_results token_is_unary  :: proc (token: Token) -> bool {return tokens_unary[token.kind]}
 
-@require_results
-token_precedence :: proc (token: Token) -> int {
-	return precedence_table[token.kind]
-}
+@require_results token_kind_precedence :: proc (token_kind: Token_Kind) -> int {return precedence_table[token_kind]}
+@require_results token_precedence      :: proc (token: Token) -> int {return precedence_table[token.kind]}
 
 @require_results
 expr_single_new :: proc (token: Token, allocator := context.allocator, loc := #caller_location) ->
