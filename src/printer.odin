@@ -325,10 +325,10 @@ write_atom :: proc (w: io.Writer, atom: Atom, parent_kind: Atom_Kind = .None, op
 		op := atom_kind_to_token_kind(atom.kind)
 
 		space := parent_kind == .None ||
-		         (atom.lhs.kind != atom.kind && atom_is_binary(atom.lhs^)) ||
-		         (atom.rhs.kind != atom.kind && atom_is_binary(atom.rhs^))
+		         atom_is_binary(atom.lhs^) ||
+		         atom_is_binary(atom.rhs^)
 
-		parens := opts.parens || token_kind_precedence(op) < token_kind_precedence(atom_kind_to_token_kind(parent_kind))
+		parens := opts.parens || token_kind_precedence(op) <= token_kind_precedence(atom_kind_to_token_kind(parent_kind))
 
 		opts := opts
 		opts.parens = opts.parens || parens
