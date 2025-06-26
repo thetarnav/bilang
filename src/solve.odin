@@ -959,23 +959,33 @@ fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated:
 			// Try substituting the var from constraints
 			if var == atom^.var do break
 			constr := constrs[atom^.var] or_break
-			if constr.kind != .Eq do break
 
-			val: ^Atom
-			if atom_val_equals(constr.lhs^, atom^.var) {
-				val = constr.rhs
-			} else if atom_val_equals(constr.rhs^, atom^.var) {
-				val = constr.lhs
-			} else {
-				break
-			}
-
-			if res, ok := find_substitution(val, atom^.var); ok {
+			if res, ok := find_eq(constr, atom^.var); ok {
 				atom^ = atom_new(res^, from=atom^)
 				run_updated = true
 			}
+
+			// for x: (x = 3) & (y = 2)  ->  3
+			find_eq :: proc (atom: ^Atom, var: string) -> (res: ^Atom, ok: bool)
+			{
+				#partial switch atom.kind {
+				case .Eq:
+					if atom_val_equals(atom.lhs^, var) {
+						res, ok = find_substitution(atom.rhs, var)
+						if ok do break
+					}
+					if atom_val_equals(atom.rhs^, var) {
+						res, ok = find_substitution(atom.lhs, var)
+					}
+				case .And:
+					res, ok = find_eq(atom.lhs, var)
+					if ok do break
+					res, ok = find_eq(atom.rhs, var)
+				}
+				return
+			}
 			
-			// for x: `3 & (x + 2)` -> `3`
+			// for x: 3 & (x + 2) -> 3
 			find_substitution :: proc (atom: ^Atom, var: string) -> (res: ^Atom, ok: bool)
 			{
 				if atom.kind == .And {

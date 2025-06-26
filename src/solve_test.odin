@@ -134,19 +134,19 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 		"b = 12\n",	
 	)
 
-	// solve_test_case(t,
-	// 	"y = a * x + b\n"+
-	// 	"a = 1 / 2\n"+
-	// 	"b = -4\n"+
-	// 	"y = 2\n",
-	// 	"y: y = 2.0\n"+
-	// 	"a: a = 0.5\n"+
-	// 	"x: x = 12.0\n"+
-	// 	"b: b = -4.0\n"+
-	// 	"b: b = -4\n"+
-	// 	"y: y = 2\n",
-	// 	expected_good=false, // TODO: float == int
-	// )
+	solve_test_case(t,
+		"y = a * x + b\n"+
+		"a = 1 / 2\n"+
+		"b = -4\n"+
+		"y = 2\n",
+		"y: y = 2.0\n"+
+		"a: a = 0.5\n"+
+		"x: x = 12.0\n"+
+		"b: b = -4.0\n"+
+		"b: b = -4\n"+
+		"y: y = 2\n",
+		expected_good=false, // TODO: float == int
+	)
 
 	// solve_test_case(t,
 	// 	"x = 1\n"+
