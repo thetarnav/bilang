@@ -294,60 +294,54 @@ atom_sub :: proc (lhs, rhs: ^Atom, loc := #caller_location) -> ^Atom {
 }
 
 @require_results
-atom_mul_if_possible :: proc (a, b: ^Atom) -> (product: ^Atom, ok: bool)
+atom_mul_if_possible :: proc (a, b: ^Atom, from: ^Atom = nil) -> (res: ^Atom, ok: bool)
 {
-	return visit_a_b(a, b)
-
-	visit_a_b :: proc (a, b: ^Atom) -> (res: ^Atom, ok: bool)
-	{
-		if res, ok := distribute_over_or(.Mul, a, b); ok {
-			return res, true
-		}
-		if res, ok := distribute_over_and(.Mul, b, a); ok {
-			return res, true
-		}
-		
-		// 2 * 3  ->  6
-		if a.kind == .Int && b.kind == .Int {
-			return atom_num(a.int*b.int, a), true
-		}
-		else if a.kind == .Float && b.kind == .Float {
-			return atom_num(a.float*b.float, a), true
-		}
-		else if a.kind == .Int && b.kind == .Float {
-			return atom_num(f64(a.int)*b.float, a), true
-		}
-		else if a.kind == .Float && b.kind == .Int {
-			return atom_num(a.float*f64(b.int), a), true
-		}
-
-		// x * x  ->  x^2
-		if atom_equals(a^, b^) {
-			return atom_pow(a, 2), true
-		}
-
-		// (a + b) * (c + d) -> a*c + a*d + b*c + b*d
-		if a.kind == .Add && b.kind == .Add {
-			return atom_add(
-				atom_add(
-					atom_mul(a.lhs, b.lhs),
-					atom_mul(a.lhs, b.rhs),
-				),
-				atom_add(
-					atom_mul(a.rhs, b.lhs),
-					atom_mul(a.rhs, b.rhs),
-				),
-			), true
-		}
-
-		res, ok = visit_b(a, b)
-		if ok do return
-		res, ok = visit_b(b, a)
-		return
+	if res, ok = distribute_over_or(.Mul, a, b); ok {
+		return res, true
+	}
+	if res, ok = distribute_over_and(.Mul, b, a); ok {
+		return res, true
 	}
 	
+	// 2 * 3  ->  6
+	if a.kind == .Int && b.kind == .Int {
+		return atom_num(a.int*b.int, from=from), true
+	}
+	else if a.kind == .Float && b.kind == .Float {
+		return atom_num(a.float*b.float, from=from), true
+	}
+	else if a.kind == .Int && b.kind == .Float {
+		return atom_num(f64(a.int)*b.float, from=from), true
+	}
+	else if a.kind == .Float && b.kind == .Int {
+		return atom_num(a.float*f64(b.int), from=from), true
+	}
 
-	visit_b :: proc (a, b: ^Atom) -> (res: ^Atom, ok: bool)
+	// x * x  ->  x^2
+	if atom_equals(a^, b^) {
+		return atom_pow(a, 2), true
+	}
+
+	// (a + b) * (c + d) -> a*c + a*d + b*c + b*d
+	if a.kind == .Add && b.kind == .Add {
+		return atom_add(
+			atom_add(
+				atom_mul(a.lhs, b.lhs),
+				atom_mul(a.lhs, b.rhs),
+			),
+			atom_add(
+				atom_mul(a.rhs, b.lhs),
+				atom_mul(a.rhs, b.rhs),
+			),
+		), true
+	}
+
+	res, ok = visit_b(a, b, from=from)
+	if ok do return
+	res, ok = visit_b(b, a, from=from)
+	return
+
+	visit_b :: proc (a, b: ^Atom, from: ^Atom) -> (res: ^Atom, ok: bool)
 	{
 		#partial switch b.kind {
 		case .Int:
@@ -368,7 +362,7 @@ atom_mul_if_possible :: proc (a, b: ^Atom) -> (product: ^Atom, ok: bool)
 			return atom_bin(.Pow,
 				a.lhs,
 				atom_add(a.rhs, &atom_num_one),
-				from=a,
+				from=from,
 			), true
 		}
 
@@ -388,19 +382,30 @@ atom_mul_if_possible :: proc (a, b: ^Atom) -> (product: ^Atom, ok: bool)
 			case .Div: return atom_bin(.Div,
 				atom_mul(a.lhs, b),
 				a.rhs,
-				from=a,
+				from=from,
 			), true
 			}
 		}
 
 		if a.kind == .Mul {
 			// (x * y) * x  ->  x^2 * y
-			if new_lhs, ok := visit_a_b(a.lhs, b); ok {
-				return atom_bin(.Mul, new_lhs, a.rhs, from=a), true
+			if new_lhs, ok := atom_mul_if_possible(a.lhs, b, from=from); ok {
+				return atom_bin(.Mul, new_lhs, a.rhs, from=from), true
 			}
 			// (y * x) * x  ->  y * x^2
-			if new_rhs, ok := visit_a_b(a.rhs, b); ok {
-				return atom_bin(.Mul, a.lhs, new_rhs, from=a), true
+			if new_rhs, ok := atom_mul_if_possible(a.rhs, b, from=from); ok {
+				return atom_bin(.Mul, a.lhs, new_rhs, from=from), true
+			}
+		}
+
+		if a.kind == .Div {
+			// (x / y) * x  ->  x^2 / y
+			if new_lhs, ok := atom_mul_if_possible(a.lhs, b, from=from); ok {
+				return atom_bin(.Div, new_lhs, a.rhs, from=from), true
+			}
+			// (y / x) * x  ->  y
+			if atom_equals(a.rhs, b) {
+				return atom_new(a.lhs^, from=from), true
 			}
 		}
 
@@ -883,7 +888,7 @@ fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated:
 			res: ^Atom; bin_updated: bool
 			switch atom^.kind {
 			case .Add: res, bin_updated = atom_add_if_possible(lhs, rhs)
-			case .Mul: res, bin_updated = atom_mul_if_possible(lhs, rhs)
+			case .Mul: res, bin_updated = atom_mul_if_possible(lhs, rhs, from=atom^)
 			case .Div: res, bin_updated = atom_div_if_possible(lhs, rhs)
 			case .Pow: res, bin_updated = atom_pow_if_possible(lhs, rhs)
 			case .Eq:  res, bin_updated = atom_eq_if_possible(lhs, rhs, var, from=atom^)
