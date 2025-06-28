@@ -140,8 +140,8 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 		"b = -4\n"+
 		"y = 2\n",
 		"x = 12.0\n"+
-		"b = -4\n"+
-		"y = 2\n"+
+		"(b=-4.0) & (b=-4)\n"+
+		"(y=2.0) & (y=2)\n"+
 		"a = 0.5\n",
 		// TODO: float == int
 	)

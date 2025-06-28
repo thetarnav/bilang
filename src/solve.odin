@@ -876,140 +876,134 @@ _unused_updated: bool
 
 fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated: bool)
 {
-	for {
-		run_updated := false
+	switch atom^.kind {
+	case .Add, .Mul, .Div, .Pow, .Eq, .Or, .And:
+		lhs, rhs := atom^.lhs, atom^.rhs
+		lhs_updated := fold_atom(&lhs, constrs, var)
+		rhs_updated := fold_atom(&rhs, constrs, var)
 
+		res: ^Atom; bin_updated: bool
 		switch atom^.kind {
-		case .Add, .Mul, .Div, .Pow, .Eq, .Or, .And:
-			lhs, rhs := atom^.lhs, atom^.rhs
-			lhs_updated := fold_atom(&lhs, constrs, var)
-			rhs_updated := fold_atom(&rhs, constrs, var)
-
-			res: ^Atom; bin_updated: bool
-			switch atom^.kind {
-			case .Add: res, bin_updated = atom_add_if_possible(lhs, rhs)
-			case .Mul: res, bin_updated = atom_mul_if_possible(lhs, rhs, from=atom^)
-			case .Div: res, bin_updated = atom_div_if_possible(lhs, rhs)
-			case .Pow: res, bin_updated = atom_pow_if_possible(lhs, rhs)
-			case .Eq:  res, bin_updated = atom_eq_if_possible(lhs, rhs, var, from=atom^)
-			case .Or:  res, bin_updated = atom_or_if_possible(lhs, rhs)
-			case .And:
-				//   () & x  ->  x
-				if lhs.kind == .None {
-					res, bin_updated = atom_new(rhs^, from=atom^), true
-				} // x & ()  ->  x
-				else if rhs.kind == .None {
-					res, bin_updated = atom_new(lhs^, from=atom^), true
-				} // x & x  ->  x
-				else if atom_equals(lhs, rhs) {
-					res, bin_updated = atom_new(lhs^, from=atom^), true
-				}
-			case .Int, .Float, .Str, .Var, .Get, .None: unreachable()
+		case .Add: res, bin_updated = atom_add_if_possible(lhs, rhs)
+		case .Mul: res, bin_updated = atom_mul_if_possible(lhs, rhs, from=atom^)
+		case .Div: res, bin_updated = atom_div_if_possible(lhs, rhs)
+		case .Pow: res, bin_updated = atom_pow_if_possible(lhs, rhs)
+		case .Eq:  res, bin_updated = atom_eq_if_possible(lhs, rhs, var, from=atom^)
+		case .Or:  res, bin_updated = atom_or_if_possible(lhs, rhs)
+		case .And:
+			//   () & x  ->  x
+			if lhs.kind == .None {
+				res, bin_updated = atom_new(rhs^, from=atom^), true
+			} // x & ()  ->  x
+			else if rhs.kind == .None {
+				res, bin_updated = atom_new(lhs^, from=atom^), true
+			} // x & x  ->  x
+			else if atom_equals(lhs, rhs) {
+				res, bin_updated = atom_new(lhs^, from=atom^), true
 			}
-		
-			if bin_updated {
-				// If the bin was updated, then we can use it
-				atom^ = res
-				run_updated = true
-			} else if lhs_updated || rhs_updated {
-				// If lhs or rhs were updated, but not the bin itself
-				// then we still need to update the atom
-				atom^ = atom_bin(atom^.kind, lhs, rhs, atom^)
-				run_updated = true
+		case .Int, .Float, .Str, .Var, .Get, .None: unreachable()
+		}
+	
+		if bin_updated {
+			// If the bin was updated, then we can use it
+			atom^ = res
+			updated = true
+		} else if lhs_updated || rhs_updated {
+			// If lhs or rhs were updated, but not the bin itself
+			// then we still need to update the atom
+			atom^ = atom_bin(atom^.kind, lhs, rhs, atom^)
+			updated = true
+		}
+	case .Get:
+		// Try getting the value of the var using recursive search
+		if res, ok := resolve_get(atom^, atom^.get.atom, from=atom^); ok {
+			atom^ = res
+			updated = true
+		} else {
+			// Try folding the inner atom
+			get_atom := atom^.get.atom
+			if fold_atom(&get_atom, constrs, var) {
+				atom^ = atom_get(get_atom, atom^.get.name, from=atom^)
+				updated = true
 			}
-		case .Get:
-			// Try getting the value of the var using recursive search
-			if res, ok := resolve_get(atom^, atom^.get.atom, from=atom^); ok {
-				atom^ = res
-				run_updated = true
-			} else {
-				// Try folding the inner atom
-				get_atom := atom^.get.atom
-				if fold_atom(&get_atom, constrs, var) {
-					atom^ = atom_get(get_atom, atom^.get.name, from=atom^)
-					run_updated = true
-				}
-			}
-
-			resolve_get :: proc (get, atom, from: ^Atom) -> (result: ^Atom, changed: bool) {
-				#partial switch atom.kind {
-				// ((a = x) & y).a  ->  x & (y).a
-				case .And:
-					lhs, lhs_ok := resolve_get(get, atom.lhs, from=atom.lhs)
-					rhs, rhs_ok := resolve_get(get, atom.rhs, from=atom.rhs)
-					if lhs_ok || rhs_ok {
-						if !lhs_ok {
-							lhs = atom_get(lhs, get.get.name, from=lhs)
-						}
-						if !rhs_ok {
-							rhs = atom_get(rhs, get.get.name, from=rhs)
-						}
-						return atom_bin(.And, lhs, rhs, from=get), true
-					}
-				// (a = x).a  ->  x
-				case .Eq:
-					if atom_val_equals(atom.lhs^, get.get.name) {
-						return atom.rhs, true
-					}
-					if atom_val_equals(atom.rhs^, get.get.name) {
-						return atom.lhs, true
-					}
-				}
-				// (a * 2 = x).a (not resolved)
-				if has_dependency(atom^, get.get.name) {
-					return atom, false
-				}
-				// (123).a  ->  ()
-				return atom_new({kind = .None}, from=from), true
-			}
-		case .Var:
-			// Try substituting the var from constraints
-			if var == atom^.var do break
-			constr := constrs[atom^.var] or_break
-
-			if res, ok := find_eq(constr, atom^.var); ok {
-				atom^ = atom_new(res^, from=atom^)
-				run_updated = true
-			}
-
-			// for x: (x = 3) & (y = 2)  ->  3
-			find_eq :: proc (atom: ^Atom, var: string) -> (res: ^Atom, ok: bool)
-			{
-				#partial switch atom.kind {
-				case .Eq:
-					if atom_val_equals(atom.lhs^, var) {
-						res, ok = find_substitution(atom.rhs, var)
-						if ok do break
-					}
-					if atom_val_equals(atom.rhs^, var) {
-						res, ok = find_substitution(atom.lhs, var)
-					}
-				case .And:
-					res, ok = find_eq(atom.lhs, var)
-					if ok do break
-					res, ok = find_eq(atom.rhs, var)
-				}
-				return
-			}
-			
-			// for x: 3 & (x + 2) -> 3
-			find_substitution :: proc (atom: ^Atom, var: string) -> (res: ^Atom, ok: bool)
-			{
-				if atom.kind == .And {
-					res, ok = find_substitution(atom.lhs, var)
-					if ok do return
-					res, ok = find_substitution(atom.rhs, var)
-					return
-				}
-				return atom, !has_dependency(atom^, var)
-			}
-		case .Int, .Float, .Str, .None:
-			// constants and vars are not foldable
 		}
 
-		if !run_updated do break
+		resolve_get :: proc (get, atom, from: ^Atom) -> (result: ^Atom, changed: bool) {
+			#partial switch atom.kind {
+			// ((a = x) & y).a  ->  x & (y).a
+			case .And:
+				lhs, lhs_ok := resolve_get(get, atom.lhs, from=atom.lhs)
+				rhs, rhs_ok := resolve_get(get, atom.rhs, from=atom.rhs)
+				if lhs_ok || rhs_ok {
+					if !lhs_ok {
+						lhs = atom_get(lhs, get.get.name, from=lhs)
+					}
+					if !rhs_ok {
+						rhs = atom_get(rhs, get.get.name, from=rhs)
+					}
+					return atom_bin(.And, lhs, rhs, from=get), true
+				}
+			// (a = x).a  ->  x
+			case .Eq:
+				if atom_val_equals(atom.lhs^, get.get.name) {
+					return atom.rhs, true
+				}
+				if atom_val_equals(atom.rhs^, get.get.name) {
+					return atom.lhs, true
+				}
+			}
+			// (a * 2 = x).a (not resolved)
+			if has_dependency(atom^, get.get.name) {
+				return atom, false
+			}
+			// (123).a  ->  ()
+			return atom_new({kind = .None}, from=from), true
+		}
+	case .Var:
+		// Try substituting the var from constraints
+		if var == atom^.var do break
+		constr := constrs[atom^.var] or_break
 
-		updated = true
+		if res, ok := find_eq(constr, atom^.var, var); ok {
+			atom^ = atom_new(res^, from=atom^)
+			updated = true
+		}
+
+		// for x: (x = 3) & (y = 2)  ->  3
+		find_eq :: proc (atom: ^Atom, var, constr_var: string) -> (res: ^Atom, ok: bool)
+		{
+			#partial switch atom.kind {
+			case .Eq:
+				if atom_val_equals(atom.lhs^, var) {
+					res, ok = find_substitution(atom.rhs, var, constr_var)
+					if ok do break
+				}
+				if atom_val_equals(atom.rhs^, var) {
+					res, ok = find_substitution(atom.lhs, var, constr_var)
+				}
+			case .And:
+				res, ok = find_eq(atom.lhs, var, constr_var)
+				if ok do break
+				res, ok = find_eq(atom.rhs, var, constr_var)
+			}
+			return
+		}
+		
+		// for x: 3 & (x + 2) -> 3
+		find_substitution :: proc (atom: ^Atom, var, constr_var: string) -> (res: ^Atom, ok: bool)
+		{
+			if atom.kind == .And {
+				res, ok = find_substitution(atom.lhs, var, constr_var)
+				if ok do return
+				res, ok = find_substitution(atom.rhs, var, constr_var)
+				return
+			}
+			return atom, atom.kind != .None &&
+			       !has_dependency(atom^, var) &&
+			       !has_dependency(atom^, constr_var)
+		}
+	case .Int, .Float, .Str, .None:
+		// constants and vars are not foldable
 	}
 
 	return
