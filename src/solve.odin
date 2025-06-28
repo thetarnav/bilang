@@ -919,7 +919,7 @@ fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated:
 			}
 		case .Get:
 			// Try getting the value of the var using recursive search
-			if res, ok := resolve_get(atom^, atom^.get.atom); ok {
+			if res, ok := resolve_get(atom^, atom^.get.atom, from=atom^); ok {
 				atom^ = res
 				run_updated = true
 			} else {
@@ -931,18 +931,18 @@ fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated:
 				}
 			}
 
-			resolve_get :: proc (get: ^Atom, atom: ^Atom) -> (result: ^Atom, changed: bool) {
+			resolve_get :: proc (get, atom, from: ^Atom) -> (result: ^Atom, changed: bool) {
 				#partial switch atom.kind {
 				// ((a = x) & y).a  ->  x & (y).a
 				case .And:
-					lhs, lhs_ok := resolve_get(get, atom.lhs)
-					rhs, rhs_ok := resolve_get(get, atom.rhs)
+					lhs, lhs_ok := resolve_get(get, atom.lhs, from=atom.lhs)
+					rhs, rhs_ok := resolve_get(get, atom.rhs, from=atom.rhs)
 					if lhs_ok || rhs_ok {
 						if !lhs_ok {
-							lhs = atom_get(lhs, get.get.name)
+							lhs = atom_get(lhs, get.get.name, from=lhs)
 						}
 						if !rhs_ok {
-							rhs = atom_get(rhs, get.get.name)
+							rhs = atom_get(rhs, get.get.name, from=rhs)
 						}
 						return atom_bin(.And, lhs, rhs, from=get), true
 					}
@@ -960,7 +960,7 @@ fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated:
 					return atom, false
 				}
 				// (123).a  ->  ()
-				return atom_new({kind = .None}, from=get), true
+				return atom_new({kind = .None}, from=from), true
 			}
 		case .Var:
 			// Try substituting the var from constraints
