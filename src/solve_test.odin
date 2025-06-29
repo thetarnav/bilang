@@ -8,7 +8,7 @@ import "core:log"
 import test "core:testing"
 
 
-solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := true, expected_good := true) {
+solve_test_case :: proc(t: ^test.T, input, expected: string) {
 
 	@static arena_buf: [10*mem.Megabyte]byte
 	parser_arena: mem.Arena
@@ -30,7 +30,7 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 	}
 
 	constrs := constraints_from_expr(expr)
-	solved, good := resolve(&constrs)
+	resolve(&constrs)
 
 	b := strings.builder_make_len_cap(0, 1024)
 	w := strings.to_writer(&b)
@@ -39,7 +39,7 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 
 	output := strings.to_string(b)
 
-	if output != expected || solved != expected_solved || good != expected_good {
+	if output != expected {
 		strings.builder_reset(&b) // makes output unusable !!!
 
 		write_constraints(w, constrs, {highlight=true})
@@ -62,20 +62,6 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 				"\e[0;32mEXPECTED:\e[0m\n%s"+
 				"\e[0;31mACTUAL:\e[0m\n%s",
 				expected, output_pretty,
-			))
-		}
-
-		if solved != expected_solved {
-			strings.write_string(&b, fmt.aprintf(
-				"\nSOLVED: %t \e[0;31m(expected %t)\e[0m",
-				solved, expected_solved,
-			))
-		}
-
-		if good != expected_good {
-			strings.write_string(&b, fmt.aprintf(
-				", GOOD: %t \e[0;31m(expected %t)\e[0m",
-				good, expected_good,
 			))
 		}
 
@@ -215,44 +201,43 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 		"x = Inf\n",
 	)
 
-	// solve_test_case(t,
-	// 	"x = -1/0\n",
-	// 	"x: x = -Inf\n",
-	// )
+	solve_test_case(t,
+		"x = -1/0\n",
+		"x = -Inf\n",
+	)
 
-	// solve_test_case(t,
-	// 	"x * x = -1\n",
-	// 	"x: x = NaN\n",
-	// 	// TODO: fail because x is not real
-	// )
+	solve_test_case(t,
+		"x * x = -1\n",
+		"x = NaN\n",
+		// TODO: fail because x is not real
+	)
 
-	// solve_test_case(t,
-	// 	"(x^2 + 12) * (x + 1) = 4",
-	// 	"x: x^3 + x^2 + 12*x = -8\n",
-	// 	expected_solved=false,
-	// )
+	solve_test_case(t,
+		"(x^2 + 12) * (x + 1) = 4",
+		"x^3 + x^2 + 12*x = -8\n",
+	)
 
-	// solve_test_case(t,
-	// 	"x^3 = 1 + x",
-	// 	"x: x = 1.324717957244746\n"
-	// )
+	solve_test_case(t,
+		"x^3 = 1 + x",
+		"x = 1.324717957244746\n"
+	)
 
-	// solve_test_case(t,
-	// 	"3 * x^2 = 6",
-	// 	"x: x = 1.4142135623730951\n",
-	// )
+	solve_test_case(t,
+		"3 * x^2 = 6",
+		"x = 1.4142135623730951\n",
+	)
 
-	// solve_test_case(t,
-	// 	"a = \"hello\" + \"world\"",
-	// 	"a: a = \"helloworld\"\n",
-	// )
+	solve_test_case(t,
+		"a = \"hello\" + \"world\"",
+		"a = \"helloworld\"\n",
+	)
 
-	// solve_test_case(t,
-	// 	"a = 2 | 1\n"+
-	// 	"b = a * 2",
-	// 	"a: a = 2|1\n"+
-	// 	"b: b = 4|2\n"+
-	// 	"a: a = 2.0|1.0\n",
-	// 	expected_good=false, // TODO: float == int
-	// )
+	solve_test_case(t,
+		"a = 2 | 1\n"+
+		"b = a * 2",
+		"a = 2|1\n"+
+		"b = 4|2\n"+
+		"a = 2.0|1.0\n",
+		// TODO: float == int
+	)
 }

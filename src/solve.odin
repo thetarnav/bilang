@@ -1168,14 +1168,12 @@ try_finding_polynomial_solution :: proc (atom: ^^Atom, var: string, constrs: ^Co
 // 1. solve
 // 2. remove duplicates
 // 3. return false if contradicting
-resolve :: proc (constrs: ^Constraints, allocator := context.allocator) ->
-	(solved: bool, ok: bool)
-{
+resolve :: proc (constrs: ^Constraints, allocator := context.allocator) {
 	context.allocator = allocator
 
 	solve(constrs, allocator)
 
-	solved, ok = true, true
+	// solved, ok = true, true
 
 	// outer: for constr in constrs_in {
 
