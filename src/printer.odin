@@ -267,7 +267,8 @@ constraints_to_string :: proc (
 }
 write_constraints :: proc (w: io.Writer, constrs: Constraints, opts: Writer_Options = {})
 {
-	for _, atom in constrs {
+	for var in constrs.order {
+		atom := constrs.vars[var]
 		write_atom(w, atom^, .None, opts)
 		write_newline(w)
 	}

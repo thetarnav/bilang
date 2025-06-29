@@ -30,7 +30,7 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 	}
 
 	constrs := constraints_from_expr(expr)
-	solved, good := resolve(constrs)
+	solved, good := resolve(&constrs)
 
 	b := strings.builder_make_len_cap(0, 1024)
 	w := strings.to_writer(&b)
@@ -80,7 +80,8 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 		}
 
 		strings.write_string(&b, "\nTRANSFORMATION HISTORY:\n")
-		for var, atom in constrs {
+		for var in constrs.order {
+			atom := constrs.vars[var]
 			strings.write_string(&b, var)
 			write_highlight(w, .Punct, {highlight=true})
 			strings.write_string(&b, ": ")
@@ -139,87 +140,80 @@ solve_test_case :: proc(t: ^test.T, input, expected: string, expected_solved := 
 		"a = 1 / 2\n"+
 		"b = -4\n"+
 		"y = 2\n",
-		"x = 12.0\n"+
-		"(b=-4.0) & (b=-4)\n"+
 		"(y=2.0) & (y=2)\n"+
-		"a = 0.5\n",
+		"a = 0.5\n"+
+		"x = 12.0\n"+
+		"(b=-4.0) & (b=-4)\n",
 		// TODO: float == int
 	)
 
-	// solve_test_case(t,
-	// 	"x = 1\n"+
-	// 	"x = 2",
-	// 	"x: x = 1\n"+
-	// 	"x: x = 2\n",
-	// 	expected_good=false,
-	// )
+	solve_test_case(t,
+		"x = 1\n"+
+		"x = 2",
+		"(x=1) & (x=2)\n",
+	)
 
-	// solve_test_case(t,
-	// 	"(n * 2 + 10) / (n + 1) = 3",
-	// 	"n: n = 7\n",
-	// )
+	solve_test_case(t,
+		"(n * 2 + 10) / (n + 1) = 3",
+		"n = 7\n",
+	)
 
-	// solve_test_case(t,
-	// 	"(n * 2 + 10) / (n + 1) = 2 * x\n"+
-	// 	"x * 2 = 3\n",
-	// 	"n: n = 7.0\n"+
-	// 	"x: x = 1.5\n",
-	// )
+	solve_test_case(t,
+		"(n * 2 + 10) / (n + 1) = 2 * x\n"+
+		"x * 2 = 3\n",
+		"n = 7.0\n"+
+		"x = 1.5\n",
+	)
 
-	// solve_test_case(t,
-	// 	"(4*n + 10) / (n + 1) = 3*x\n"+
-	// 	"2*x = 6",
-	// 	"n: n = 0.2\n"+
-	// 	"x: x = 3.0\n"+
-	// 	"x: x = 3\n",
-	// 	expected_good=false, // TODO: float == int
-	// )
+	solve_test_case(t,
+		"(4*n + 10) / (n + 1) = 3*x\n"+
+		"2*x = 6",
+		"n = 0.2\n"+
+		"(x=3.0) & (x=3)\n",
+	)
 
-	// solve_test_case(t,
-	// 	"(4*n + 10) / (n + 2) = 2*x + 1/2\n",
-	// 	"n: n = (4*x + -9.0) / (3.5 + -2*x)\n"+
-	// 	"x: x = (n*-3.5 + -9.0) / (-2*n + -4)\n",
-	// 	expected_solved=false,
-	// )
+	solve_test_case(t,
+		"(4*n + 10) / (n + 2) = 2*x + 1/2\n",
+		"n = (4*x + -9.0) / (3.5 + -2*x)\n"+
+		"x = (n*-3.5 + -9.0) / (-2*n + -4)\n",
+	)
 
-	// solve_test_case(t,
-	// 	"a*b = 0\n",
-	// 	"a: a = 0\n"+
-	// 	"b: b = 0\n",
-	// 	// TODO: this is not true, it's EITHER a = 0 OR b = 0
-	// )
+	solve_test_case(t,
+		"a*b = 0\n",
+		"a = 0\n"+
+		"b = 0\n",
+		// TODO: this is not true, it's EITHER a = 0 OR b = 0
+	)
 
-	// solve_test_case(t,
-	// 	`a*x + b*y + c = 0`,
-	// 	"a: a = (-b*y + -c) / x\n"+
-	// 	"x: x = (-b*y + -c) / a\n"+
-	// 	"b: b = (-a*x + -c) / y\n"+
-	// 	"y: y = (-a*x + -c) / b\n"+
-	// 	"c: c = -a*x + -b*y\n",
-	// 	expected_solved=false,
-	// )
+	solve_test_case(t,
+		`a*x + b*y + c = 0`,
+		"a = (-(b*y) + -c) / x\n"+
+		"x = (-(b*y) + -c) / a\n"+
+		"b = (-(a*x) + -c) / y\n"+
+		"y = (-(a*x) + -c) / b\n"+
+		"c = -(a*x) + -(b*y)\n",
+	)
 
-	// solve_test_case(t,
-	// 	"2*x + 4*y = 0\n",
-	// 	"x: x = -2*y\n"+
-	// 	"y: y = -0.5*x\n",
-	// 	expected_solved=false,
-	// )
+	solve_test_case(t,
+		"2*x + 4*y = 0\n",
+		"x = -2*y\n"+
+		"y = -0.5*x\n",
+	)
 
-	// solve_test_case(t,
-	// 	"x * x = 4\n",
-	// 	"x: x = 2.0\n",
-	// )
+	solve_test_case(t,
+		"x * x = 4\n",
+		"x = 2.0\n",
+	)
 
-	// solve_test_case(t,
-	// 	"x * x = 0\n",
-	// 	"x: x = 0.0\n",
-	// )
+	solve_test_case(t,
+		"x * x = 0\n",
+		"x = 0\n",
+	)
 
-	// solve_test_case(t,
-	// 	"x = 1/0\n",
-	// 	"x: x = Inf\n",
-	// )
+	solve_test_case(t,
+		"x = 1/0\n",
+		"x = Inf\n",
+	)
 
 	// solve_test_case(t,
 	// 	"x = -1/0\n",

@@ -47,7 +47,10 @@ Atom_Kind :: enum u8 {
 ATOM_NUM_KINDS    :: bit_set[Atom_Kind]{.Int, .Float}
 ATOM_BINARY_KINDS :: bit_set[Atom_Kind]{.Add, .Div, .Mul, .Pow, .Or, .And, .Eq}
 
-Constraints :: map[string]^Atom
+Constraints :: struct {
+	vars:  map[string]^Atom,
+	order: [dynamic]string,
+}
 
 atom_kind_to_token_kind :: proc (kind: Atom_Kind) -> Token_Kind {
 	switch kind {
@@ -874,7 +877,7 @@ atom_equals :: proc{atom_equals_val, atom_equals_ptr}
 
 _unused_updated: bool
 
-fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated: bool)
+fold_atom :: proc (atom: ^^Atom, constrs: ^Constraints, var: string) -> (updated: bool)
 {
 	switch atom^.kind {
 	case .Add, .Mul, .Div, .Pow, .Eq, .Or, .And:
@@ -962,7 +965,7 @@ fold_atom :: proc (atom: ^^Atom, constrs: Constraints, var: string) -> (updated:
 	case .Var:
 		// Try substituting the var from constraints
 		if var == atom^.var do break
-		constr := constrs[atom^.var] or_break
+		constr := constrs.vars[atom^.var] or_break
 
 		if res, ok := find_eq(constr, atom^.var, var); ok {
 			atom^ = atom_new(res^, from=atom^)
@@ -1065,11 +1068,12 @@ atom_from_expr :: proc (expr: Expr) -> (a: ^Atom)
 }
 	
 @require_results
-constraints_from_expr :: proc (expr: Expr, allocator := context.allocator) -> Constraints
+constraints_from_expr :: proc (expr: Expr, allocator := context.allocator) -> (constrs: Constraints)
 {
 	context.allocator = allocator
 
-	constrs := make(Constraints)
+	constrs.vars  = make(map[string]^Atom, allocator)
+	constrs.order = make([dynamic]string, allocator)
 
 	atom := atom_from_expr(expr)
 
@@ -1085,8 +1089,9 @@ constraints_from_expr :: proc (expr: Expr, allocator := context.allocator) -> Co
 			// Do nothing for constants
 			return
 		case .Var:
-			if atom.var not_in constrs {
-				constrs[atom.var] = atom_bin(.Eq,
+			if atom.var not_in constrs.vars {
+				append(&constrs.order, atom.var)
+				constrs.vars[atom.var] = atom_bin(.Eq,
 					atom_var(atom.var),
 					atom_get(root_atom, atom.var))
 			}
@@ -1099,27 +1104,28 @@ constraints_from_expr :: proc (expr: Expr, allocator := context.allocator) -> Co
 		}
 	}
 
-	return constrs
+	return
 }
 
-solve :: proc (constrs: Constraints, allocator := context.allocator)
+solve :: proc (constrs: ^Constraints, allocator := context.allocator)
 {
 	context.allocator = allocator
 
 	solve_loop: for {
 		updated: bool
 
-		for var, &atom in constrs {
-			fold_atom(&atom, constrs, var) or_continue
+		for var in constrs.order {
+			fold_atom(&constrs.vars[var], constrs, var) or_continue
 			updated = true
 		}
 
 		if updated do continue
 
-		// for var, &atom in constrs {
-			
+		// for var in constrs.order {
+		// 	atom := constrs.vars[var]
 		// 	// try approximation
 		// 	try_finding_polynomial_solution(&atom, var, constrs, &updated)
+		// 	constraints_set(constrs, var, atom)
 
 		// 	if updated {
 		// 		continue solve_loop
@@ -1130,7 +1136,7 @@ solve :: proc (constrs: Constraints, allocator := context.allocator)
 	}
 }
 
-try_finding_polynomial_solution :: proc (atom: ^^Atom, var: string, constrs: Constraints, updated: ^bool)
+try_finding_polynomial_solution :: proc (atom: ^^Atom, var: string, constrs: ^Constraints, updated: ^bool)
 {
 	context.allocator = context.temp_allocator
 
@@ -1162,7 +1168,7 @@ try_finding_polynomial_solution :: proc (atom: ^^Atom, var: string, constrs: Con
 // 1. solve
 // 2. remove duplicates
 // 3. return false if contradicting
-resolve :: proc (constrs: Constraints, allocator := context.allocator) ->
+resolve :: proc (constrs: ^Constraints, allocator := context.allocator) ->
 	(solved: bool, ok: bool)
 {
 	context.allocator = allocator
