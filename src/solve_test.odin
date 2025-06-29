@@ -126,17 +126,17 @@ solve_test_case :: proc(t: ^test.T, input, expected: string) {
 		"a = 1 / 2\n"+
 		"b = -4\n"+
 		"y = 2\n",
-		"(y=2.0) & (y=2)\n"+
+		"y = 2.0&2\n"+
 		"a = 0.5\n"+
 		"x = 12.0\n"+
-		"(b=-4.0) & (b=-4)\n",
+		"b = -4.0&-4\n",
 		// TODO: float == int
 	)
 
 	solve_test_case(t,
 		"x = 1\n"+
 		"x = 2",
-		"(x=1) & (x=2)\n",
+		"x = 1&2\n",
 	)
 
 	solve_test_case(t,
@@ -155,7 +155,7 @@ solve_test_case :: proc(t: ^test.T, input, expected: string) {
 		"(4*n + 10) / (n + 1) = 3*x\n"+
 		"2*x = 6",
 		"n = 0.2\n"+
-		"(x=3.0) & (x=3)\n",
+		"x = 3.0&3\n",
 	)
 
 	solve_test_case(t,
@@ -235,9 +235,8 @@ solve_test_case :: proc(t: ^test.T, input, expected: string) {
 	solve_test_case(t,
 		"a = 2 | 1\n"+
 		"b = a * 2",
-		"a = 2|1\n"+
-		"b = 4|2\n"+
-		"a = 2.0|1.0\n",
+		"a = (2|1) & (2.0|1.0)\n"+
+		"b = 4|2\n",
 		// TODO: float == int
 	)
 }
