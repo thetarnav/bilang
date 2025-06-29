@@ -1126,29 +1126,17 @@ solve :: proc (constrs: ^Constraints, allocator := context.allocator)
 
 		if updated do continue
 
-		// for var in constrs.order {
-		// 	atom := constrs.vars[var]
-		// 	// try approximation
-		// 	try_finding_polynomial_solution(&atom, var, constrs, &updated)
-		// 	constraints_set(constrs, var, atom)
-
-		// 	if updated {
-		// 		continue solve_loop
-		// 	}
-		// }
-		
 		break
 	}
 }
 
 try_finding_polynomial_solution :: proc (atom: ^^Atom, var: string, constrs: ^Constraints, updated: ^bool)
 {
-	context.allocator = context.temp_allocator
-
-	// Only support equality constraints for now
-	if atom^.kind != .Eq do return
-
-	if has_dependency_other_than_var(atom^^, var) do return
+	if atom^.kind != .Eq ||
+	   (atom_val_equals(atom^.lhs^, var) && !has_dependencies(atom^.rhs^)) ||
+	   has_dependency_other_than_var(atom^^, var) {
+		return
+	}
 
 	/*
 	move right to the left to have a single atom equals 0
@@ -1157,7 +1145,7 @@ try_finding_polynomial_solution :: proc (atom: ^^Atom, var: string, constrs: ^Co
 	sub := atom_sub(atom^.lhs, atom^.rhs)
 	fold_atom(&sub, constrs, var)
 
-	poly, ok := polynomial_from_atom(sub^, var)
+	poly, ok := polynomial_from_atom(sub^, var, allocator = context.temp_allocator)
 	if !ok do return
 
 	root, found := find_polynomial_root(poly)
@@ -1165,49 +1153,7 @@ try_finding_polynomial_solution :: proc (atom: ^^Atom, var: string, constrs: ^Co
 		atom^ = atom_bin(.Eq,
 			atom_var(var, sub^.lhs),
 			atom_num(root, sub^.rhs),
-		)
+			from=atom^)
 		updated^ = true
 	}
-}
-
-// 1. solve
-// 2. remove duplicates
-// 3. return false if contradicting
-resolve :: proc (constrs: ^Constraints, allocator := context.allocator) {
-	context.allocator = allocator
-
-	solve(constrs, allocator)
-
-	// solved, ok = true, true
-
-	// outer: for constr in constrs_in {
-
-	// 	// remove duplicates
-	// 	for &c in constrs_dyn {
-	// 		if constraint_equals(constr, c) {
-	// 			continue outer
-	// 		}
-	// 	}
-		
-	// 	if is_constraint_solved(constr) {
-
-	// 		assert(constr.atom.kind == .Eq, "constraint should be solved with equality")
-	// 		assert(constr.atom.lhs.kind == .Var, "lhs of solved constraint should be a var")
-
-	// 		// check for contradictions
-	// 		for &c in constrs_dyn {
-	// 			if constr.var == c.var &&
-	// 			   is_constraint_solved(c) &&
-	// 			   !atom_equals(constr.atom, c.atom) {
-	// 				ok = false
-	// 			}
-	// 		}
-	// 	} else {
-	// 		solved = false
-	// 	}
-
-	// 	append(&constrs_dyn, constr)
-	// }
-
-	return
 }
