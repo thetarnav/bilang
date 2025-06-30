@@ -617,10 +617,25 @@ atom_pow_int :: proc (base: ^Atom, f: int, from: ^Atom = nil) -> ^Atom {
 atom_pow :: proc {atom_pow_atom, atom_pow_float, atom_pow_int}
 
 @require_results
-atom_or_if_possible :: proc (lhs, rhs: ^Atom, from: ^Atom = nil) -> (or_expr: ^Atom, ok: bool) {
-	// No simplification for basic or expressions - just return as is
-	// The real work happens when operations are applied to or expressions
-	return
+atom_or_if_possible :: proc (lhs, rhs: ^Atom, from: ^Atom = nil) -> (^Atom, bool) {
+	
+	if res, ok := distribute_over(.Or, .Or, lhs, rhs, from=from); ok {
+		return res, true
+	}
+
+	// (a = b) | (a = c)  ->  a = (b | c)
+	fold_eq: if lhs.kind == .Eq && rhs.kind == .Eq {
+		a, b, c: ^Atom
+		switch {
+		case atom_equals(lhs.lhs, rhs.lhs): a, b, c = lhs.lhs, lhs.rhs, rhs.rhs
+		case atom_equals(lhs.rhs, rhs.rhs): a, b, c = lhs.rhs, lhs.lhs, rhs.lhs
+		case atom_equals(lhs.lhs, rhs.rhs): a, b, c = lhs.lhs, rhs.lhs, lhs.rhs
+		case atom_equals(lhs.rhs, rhs.lhs): a, b, c = lhs.rhs, rhs.rhs, lhs.lhs
+		}
+		return atom_bin(.Eq, a, atom_or(b, c), from=from), true
+	}
+
+	return {}, false
 }
 
 @require_results
@@ -689,6 +704,11 @@ atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var_maybe: Maybe(string) = {}, fro
 	/*
 	move addends if they do(n't) depend on var
 	*/
+	// 1+2 = x  ->  x = 1+2
+	if !has_dependency(lhs^, var) && has_dependency(rhs^, var) {
+		lhs, rhs = rhs, lhs
+		updated = true
+	}
 	// 1+2+x = y  ->  x = y-1-2
 	if res, ok := move_addends(lhs, &rhs, var, false); ok {
 		lhs = res
@@ -739,14 +759,11 @@ atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var_maybe: Maybe(string) = {}, fro
 
 	case .Mul:
 		/*
-		handle special case: a * b = 0  ->  (a = 0) | (b = 0)
+		handle special case: a * b = 0  ->  a|b = 0
 		*/
 		if atom_num_equals_zero(rhs^) {
-			return atom_or(
-				atom_bin(.Eq, lhs.lhs, &atom_int_zero),
-				atom_bin(.Eq, lhs.rhs, &atom_int_zero),
-				from=from,
-			), true
+			lhs = atom_or(lhs.lhs, lhs.rhs)
+			updated = true
 		}
 
 		/*

@@ -161,15 +161,15 @@ solve_test_case :: proc(t: ^test.T, input, expected: string) {
 	solve_test_case(t,
 		"(4*n + 10) / (n + 2) = 2*x + 1/2\n",
 		"n = (4*x - 9.0) / (3.5 + -2*x)\n"+
-		"x = (n*-3.5 - 9.0) / (-2*n - 4)\n",
+		"x = (n*1.75 + 4.5) / (n+2)\n",
 	)
 
 	solve_test_case(t,
 		"a*b = 0\n",
 		// "a = 0\n"+
 		// "b = 0\n",
-		"a-((a=0) | (0 = -b)).a = 0\n"+
-		"b-((0 = -a) | (b=0)).b = 0\n",
+		"a-(a|b = 0).a = 0\n"+
+		"b-(a|b = 0).b = 0\n",
 		// TODO: this is not true, it's EITHER a = 0 OR b = 0
 	)
 
@@ -239,7 +239,7 @@ solve_test_case :: proc(t: ^test.T, input, expected: string) {
 	solve_test_case(t,
 		"a = 2 | 1\n"+
 		"b = a * 2",
-		"a = (2|1) & (2.0|1.0)\n"+
+		"a = 2|1\n"+
 		"b = 4|2\n",
 		// TODO: float == int
 	)
