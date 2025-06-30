@@ -323,11 +323,24 @@ write_atom :: proc (w: io.Writer, atom: Atom, parent_kind: Atom_Kind = .None, op
 			return
 		}
 
+		lhs, rhs := atom.lhs, atom.rhs
 		op := atom_kind_to_token_kind(atom.kind)
 
+		// a + (-1 * b)  ->  a - b
+		// a + (b * -1)  ->  a - b
+		if atom.kind == .Add && rhs.kind == .Mul {
+			if atom_num_equals_neg_one(rhs.lhs^) {
+				rhs = rhs.rhs
+				op = .Sub
+			} else if atom_num_equals_neg_one(rhs.rhs^) {
+				rhs = rhs.lhs
+				op = .Sub
+			}
+		}
+
 		space := parent_kind == .None ||
-		         atom_is_binary(atom.lhs^) ||
-		         atom_is_binary(atom.rhs^)
+		         atom_is_binary(lhs^) ||
+		         atom_is_binary(rhs^)
 
 		parens := opts.parens || token_kind_precedence(op) <= token_kind_precedence(atom_kind_to_token_kind(parent_kind))
 
@@ -338,11 +351,11 @@ write_atom :: proc (w: io.Writer, atom: Atom, parent_kind: Atom_Kind = .None, op
 		child_opts.parens = false
 
 		write_paren(w, .Paren_L, opts)
-		write_atom(w, atom.lhs^, atom.kind, child_opts)
+		write_atom(w, lhs^, atom.kind, child_opts)
 		if space do write_space(w)
 		write_operator_token(w, op, opts)
 		if space do write_space(w)
-		write_atom(w, atom.rhs^, atom.kind, child_opts)
+		write_atom(w, rhs^, atom.kind, child_opts)
 		write_paren(w, .Paren_R, opts)
 	}
 }

@@ -168,18 +168,18 @@ solve_test_case :: proc(t: ^test.T, input, expected: string) {
 		"a*b = 0\n",
 		// "a = 0\n"+
 		// "b = 0\n",
-		"a + -((a=0) | (0 = -b)).a = 0\n"+
-		"b + -((0 = -a) | (b=0)).b = 0\n",
+		"a-((a=0) | (0 = -b)).a = 0\n"+
+		"b-((0 = -a) | (b=0)).b = 0\n",
 		// TODO: this is not true, it's EITHER a = 0 OR b = 0
 	)
 
 	solve_test_case(t,
 		`a*x + b*y + c = 0`,
-		"a = (-(b*y) + -c) / x\n"+
-		"x = (-(b*y) + -c) / a\n"+
-		"b = (-(a*x) + -c) / y\n"+
-		"y = (-(a*x) + -c) / b\n"+
-		"c = -(a*x) + -(b*y)\n",
+		"a = (-(b*y) - c) / x\n"+
+		"x = (-(b*y) - c) / a\n"+
+		"b = (-(a*x) - c) / y\n"+
+		"y = (-(a*x) - c) / b\n"+
+		"c = -(a*x) - b*y\n",
 	)
 
 	solve_test_case(t,
@@ -216,13 +216,13 @@ solve_test_case :: proc(t: ^test.T, input, expected: string) {
 
 	solve_test_case(t,
 		"(x^2 + 12) * (x + 1) = 4",
-		"x + -((x^3 + x^2) + 12*x = -8).x = 0\n",
+		"x-((x^3 + x^2) + 12*x = -8).x = 0\n",
 		// "x^3 + x^2 + 12*x = -8\n",
 	)
 
 	solve_test_case(t,
 		"x^3 = 1 + x",
-		"x + -(x^3 + -x = 1).x = 0\n",
+		"x-(x^3 - x = 1).x = 0\n",
 		// "x = 1.324717957244746\n"
 	)
 
