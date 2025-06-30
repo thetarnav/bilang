@@ -310,9 +310,9 @@ write_atom :: proc (w: io.Writer, atom: Atom, parent_kind: Atom_Kind = .None, op
 		// x*-1  ->  -x
 		display_neg: if atom.kind == .Mul {
 			val: ^Atom
-			if atom_val_equals(atom.lhs^, -1) {
+			if atom_num_equals_neg_one(atom.lhs^) {
 				val = atom.rhs
-			} else if atom_val_equals(atom.rhs^, -1) {
+			} else if atom_num_equals_neg_one(atom.rhs^) {
 				val = atom.lhs
 			} else {
 				break display_neg
