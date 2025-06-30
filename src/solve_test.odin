@@ -160,8 +160,8 @@ solve_test_case :: proc(t: ^test.T, input, expected: string) {
 
 	solve_test_case(t,
 		"(4*n + 10) / (n + 2) = 2*x + 1/2\n",
-		"n = (4*x + -9.0) / (3.5 + -2*x)\n"+
-		"x = (n*-3.5 + -9.0) / (-2*n + -4)\n",
+		"n = (4*x - 9.0) / (3.5 + -2*x)\n"+
+		"x = (n*-3.5 - 9.0) / (-2*n - 4)\n",
 	)
 
 	solve_test_case(t,

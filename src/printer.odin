@@ -282,6 +282,8 @@ print_atom :: proc (atom: Atom, opts: Writer_Options = {}, fd := os.stdout)
 }
 write_atom :: proc (w: io.Writer, atom: Atom, parent_kind: Atom_Kind = .None, opts: Writer_Options = {})
 {
+	context.allocator = context.temp_allocator
+
 	switch atom.kind {
 	case .None:
 		write_highlight(w, .Punct, opts)
@@ -334,6 +336,18 @@ write_atom :: proc (w: io.Writer, atom: Atom, parent_kind: Atom_Kind = .None, op
 				op = .Sub
 			} else if atom_num_equals_neg_one(rhs.rhs^) {
 				rhs = rhs.lhs
+				op = .Sub
+			}
+		}
+
+		// a + -1  ->  a - 1
+		// a + -1.5  ->  a - 1.5
+		if atom.kind == .Add {
+			if rhs.kind == .Int && rhs.int < 0 {
+				rhs = atom_int(-rhs.int)
+				op = .Sub
+			} else if rhs.kind == .Float && rhs.float < 0 {
+				rhs = atom_float(-rhs.float)
 				op = .Sub
 			}
 		}
