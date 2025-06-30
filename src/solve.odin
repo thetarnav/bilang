@@ -682,8 +682,8 @@ atom_or_if_possible :: proc (lhs, rhs: ^Atom, from: ^Atom = nil) -> (or_expr: ^A
 }
 
 @require_results
-atom_or :: proc (a, b: ^Atom, loc := #caller_location) -> ^Atom {
-	return atom_or_if_possible(a, b) or_else atom_bin(.Or, a, b, a, loc)
+atom_or :: proc (a, b: ^Atom, from: ^Atom = nil, loc := #caller_location) -> ^Atom {
+	return atom_or_if_possible(a, b, from=from) or_else atom_bin(.Or, a, b, from=from, loc=loc)
 }
 
 @require_results
@@ -796,6 +796,17 @@ atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var_maybe: Maybe(string) = {}, fro
 		}
 
 	case .Mul:
+		/*
+		handle special case: a * b = 0  ->  (a = 0) | (b = 0)
+		*/
+		if atom_num_equals_zero(rhs^) {
+			return atom_or(
+				atom_bin(.Eq, lhs.lhs, &atom_num_zero),
+				atom_bin(.Eq, lhs.rhs, &atom_num_zero),
+				from=from,
+			), true
+		}
+
 		/*
 		move factors to rhs
 		2 * x = 1  ->  x = 1/2

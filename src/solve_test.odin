@@ -166,8 +166,10 @@ solve_test_case :: proc(t: ^test.T, input, expected: string) {
 
 	solve_test_case(t,
 		"a*b = 0\n",
-		"a = 0\n"+
-		"b = 0\n",
+		// "a = 0\n"+
+		// "b = 0\n",
+		"a + -((a=0) | (0 = -b)).a = 0\n"+
+		"b + -((0 = -a) | (b=0)).b = 0\n",
 		// TODO: this is not true, it's EITHER a = 0 OR b = 0
 	)
 
