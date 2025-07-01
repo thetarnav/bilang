@@ -926,11 +926,29 @@ fold_atom :: proc (atom: ^^Atom, constrs: ^Constraints, var: string) -> (updated
 				}
 			// (a = x).a  ->  x
 			case .Eq:
-				if atom_val_equals(atom.lhs^, get.get.name) {
-					return atom.rhs, true
-				}
-				if atom_val_equals(atom.rhs^, get.get.name) {
-					return atom.lhs, true
+				if atom_val_equals(atom.lhs^, get.get.name) do return atom.rhs, true
+				if atom_val_equals(atom.rhs^, get.get.name) do return atom.lhs, true
+				// (a|b = x).a  ->  x | (b = x).a
+				or_case: {
+					a, b, x: ^Atom
+					switch {
+					case atom.lhs.kind == .Or && atom_val_equals(atom.lhs.lhs^, get.get.name):
+						a, b, x = atom.lhs.lhs, atom.lhs.rhs, atom.rhs
+					case atom.lhs.kind == .Or && atom_val_equals(atom.lhs.rhs^, get.get.name):
+						a, b, x = atom.lhs.rhs, atom.lhs.lhs, atom.rhs
+					case atom.rhs.kind == .Or && atom_val_equals(atom.rhs.lhs^, get.get.name):
+						a, b, x = atom.rhs.lhs, atom.rhs.rhs, atom.lhs
+					case atom.rhs.kind == .Or && atom_val_equals(atom.rhs.rhs^, get.get.name):
+						a, b, x = atom.rhs.rhs, atom.rhs.lhs, atom.lhs
+					case: break or_case
+					}
+					return atom_new_or(
+						x,
+						atom_new_get(
+							atom_new_eq(b, x),
+							get.get.name),
+						from=from,
+					), true
 				}
 			}
 			// (a * 2 = x).a (not resolved)
