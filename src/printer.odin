@@ -344,17 +344,17 @@ write_atom :: proc (w: io.Writer, atom: Atom, parent_kind: Atom_Kind = .None, op
 		// a + -1.5  ->  a - 1.5
 		if atom.kind == .Add {
 			if rhs.kind == .Int && rhs.int < 0 {
-				rhs = atom_int(-rhs.int)
+				rhs = atom_new_int(-rhs.int)
 				op = .Sub
 			} else if rhs.kind == .Float && rhs.float < 0 {
-				rhs = atom_float(-rhs.float)
+				rhs = atom_new_float(-rhs.float)
 				op = .Sub
 			}
 		}
 
 		space := parent_kind == .None ||
-		         atom_is_binary(lhs^) ||
-		         atom_is_binary(rhs^)
+		         atom_is_bin(lhs^) ||
+		         atom_is_bin(rhs^)
 
 		parens := opts.parens || token_kind_precedence(op) <= token_kind_precedence(atom_kind_to_token_kind(parent_kind))
 
