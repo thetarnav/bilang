@@ -911,7 +911,8 @@ fold_atom :: proc (atom: ^^Atom, constrs: ^Constraints, var: string) -> (updated
 		resolve_get :: proc (get, atom, from: ^Atom) -> (result: ^Atom, changed: bool) {
 			#partial switch atom.kind {
 			// ((a = x) & y).a  ->  x & (y).a
-			case .And:
+			// ((a = x) | y).a  ->  x | (y).a
+			case .And, .Or:
 				lhs, lhs_ok := resolve_get(get, atom.lhs, from=atom.lhs)
 				rhs, rhs_ok := resolve_get(get, atom.rhs, from=atom.rhs)
 				if lhs_ok || rhs_ok {
@@ -921,7 +922,7 @@ fold_atom :: proc (atom: ^^Atom, constrs: ^Constraints, var: string) -> (updated
 					if !rhs_ok {
 						rhs = atom_new_get(rhs, get.get.name, from=rhs)
 					}
-					return atom_new_and(lhs, rhs, from=get), true
+					return atom_new_bin(atom.kind, lhs, rhs, from=get), true
 				}
 			// (a = x).a  ->  x
 			case .Eq:
