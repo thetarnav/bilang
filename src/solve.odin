@@ -128,89 +128,73 @@ atom_num_equals_const :: proc (atom: Atom, $N: int) -> bool {
 @require_results atom_num_equals_neg_one :: proc (atom: Atom) -> bool {return atom_num_equals_const(atom, -1)}
 
 @require_results
-atom_add_if_possible :: proc (a, b: ^Atom, from: ^Atom = nil) -> (sum: ^Atom, ok: bool)
+atom_add_if_possible :: proc (a, b: ^Atom, from: ^Atom = nil) -> (res: ^Atom, ok: bool)
 {
-	return visit_a_b(a, b, from)
-
-	visit_a_b :: proc (a, b: ^Atom, from: ^Atom) -> (res: ^Atom, ok: bool)
-	{
-		if res, ok := distribute_over(.Or, .Add, a, b, from=from); ok {
-			return res, true
-		}
-		if res, ok := distribute_over(.And, .Add, b, a, from=from); ok {
-			return res, true
-		}
-		
-		// 1 + 2  ->  3
-		if a.kind == .Int && b.kind == .Int {
-			return atom_new_val(a.int+b.int, from=from), true
-		}
-		else if a.kind == .Float && b.kind == .Float {
-			return atom_new_val(a.float+b.float, from=from), true
-		}
-		else if a.kind == .Int && b.kind == .Float {
-			return atom_new_val(f64(a.int)+b.float, from=from), true
-		}
-		else if a.kind == .Float && b.kind == .Int {
-			return atom_new_val(a.float+f64(b.int), from=from), true
-		}
-
-		// "foo" + "bar"  ->  "foobar"
-		if a.kind == .Str && b.kind == .Str {
-			return atom_new_str(
-				strings.concatenate({a.str, b.str}),
-				from=from,
-			), true
-		}
- 
-		/*
-			x * x    ->  2x
-			2x * x   ->  3x
-			x * 2x   ->  3x
-			2x * 2x  ->  4x
-		*/
-		{
-			atom_val_factor :: proc (atom: ^Atom) -> (val: ^Atom, f: ^Atom)
-			{
-				if atom.kind == .Mul {
-					if atom.lhs.kind == .Int || atom.lhs.kind == .Float {
-						return atom.rhs, atom.lhs
-					} else if atom.rhs.kind == .Int || atom.rhs.kind == .Float {
-						return atom.lhs, atom.rhs
-					}
-				}
-				return atom, &atom_int_one
-			}
-
-			a_val, a_f := atom_val_factor(a)
-			b_val, b_f := atom_val_factor(b)
-
-			if atom_equals(a_val, b_val) {
-				return atom_mul(
-					a_val,
-					atom_add(a_f, b_f),
-					from=from,
-				), true
-			}
-		}
-
-		// a/b + c/d  ->  (ad + cb)/bd
-		if a.kind == .Div && b.kind == .Div {
-			return atom_div(
-				atom_add(
-					atom_mul(a.lhs, b.rhs),
-					atom_mul(b.lhs, a.rhs),
-				),
-				atom_mul(a.rhs, b.rhs),
-				from=from,
-			), true
-		}
-
-		res, ok = visit_b(a, b)
-		if ok do return
-		res, ok = visit_b(b, a)
-		return
+	res, ok = distribute_over(.Or, .Add, a, b, from=from)
+	if ok do return
+	res, ok = distribute_over(.And, .Add, b, a, from=from)
+	if ok do return
+	
+	switch ([2]Atom_Kind{a.kind, b.kind}) {
+	// 1 + 2  ->  3
+	case {.Int,   .Int}:   return atom_new_val(a.int+b.int, from=from), true
+	case {.Float, .Float}: return atom_new_val(a.float+b.float, from=from), true
+	case {.Int,   .Float}: return atom_new_val(f64(a.int)+b.float, from=from), true
+	case {.Float, .Int}:   return atom_new_val(a.float+f64(b.int), from=from), true
+	// "foo" + "bar"  ->  "foobar"
+	case {.Str,   .Str}:
+		return atom_new_str(
+			strings.concatenate({a.str, b.str}),
+			from=from), true
 	}
+
+	/*
+		x * x    ->  2x
+		2x * x   ->  3x
+		x * 2x   ->  3x
+		2x * 2x  ->  4x
+	*/
+	{
+		atom_val_factor :: proc (atom: ^Atom) -> (val: ^Atom, f: ^Atom)
+		{
+			if atom.kind == .Mul {
+				if atom.lhs.kind == .Int || atom.lhs.kind == .Float {
+					return atom.rhs, atom.lhs
+				} else if atom.rhs.kind == .Int || atom.rhs.kind == .Float {
+					return atom.lhs, atom.rhs
+				}
+			}
+			return atom, &atom_int_one
+		}
+
+		a_val, a_f := atom_val_factor(a)
+		b_val, b_f := atom_val_factor(b)
+
+		if atom_equals(a_val, b_val) {
+			return atom_mul(
+				a_val,
+				atom_add(a_f, b_f),
+				from=from,
+			), true
+		}
+	}
+
+	// a/b + c/d  ->  (ad + cb)/bd
+	if a.kind == .Div && b.kind == .Div {
+		return atom_div(
+			atom_add(
+				atom_mul(a.lhs, b.rhs),
+				atom_mul(b.lhs, a.rhs),
+			),
+			atom_mul(a.rhs, b.rhs),
+			from=from,
+		), true
+	}
+
+	res, ok = visit_b(a, b)
+	if ok do return
+	res, ok = visit_b(b, a)
+	return
 	
 	visit_b :: proc (a, b: ^Atom) -> (res: ^Atom, ok: bool)
 	{
@@ -232,11 +216,11 @@ atom_add_if_possible :: proc (a, b: ^Atom, from: ^Atom = nil) -> (sum: ^Atom, ok
 			}
 		case .Add:
 			// (x + y) + x  ->  2x + y
-			if new_lhs, ok := visit_a_b(b.lhs, a, b); ok {
+			if new_lhs, ok := atom_add_if_possible(b.lhs, a, b); ok {
 				return atom_new_add(new_lhs, b.rhs, b), true
 			}
 			// (y + x) + x  ->  y + 2x
-			if new_rhs, ok := visit_a_b(b.rhs, a, b); ok {
+			if new_rhs, ok := atom_add_if_possible(b.rhs, a, b); ok {
 				return atom_new_add(b.lhs, new_rhs, b), true
 			}
 		case .Mul, .Pow, .Var, .Str, .Or, .Eq, .And, .Get, .None:
