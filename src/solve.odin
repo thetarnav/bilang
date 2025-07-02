@@ -80,10 +80,15 @@ atom_new :: proc (atom: Atom, from: ^Atom = nil, loc := #caller_location) -> ^At
 	return a
 }
 
+atom_none        := Atom{kind=.None}
 atom_int_zero    := Atom{kind=.Int, int= 0}
 atom_int_one     := Atom{kind=.Int, int= 1}
 atom_int_neg_one := Atom{kind=.Int, int=-1}
 
+@require_results
+atom_new_none :: proc (from: ^Atom = nil, loc := #caller_location) -> ^Atom {
+	return atom_new(atom_none, from=from, loc=loc) if from != nil else &atom_none
+}
 @require_results
 atom_new_int :: proc (val: int, from: ^Atom = nil, loc := #caller_location) -> ^Atom {
 	if from == nil do switch val {
@@ -655,7 +660,7 @@ atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var_maybe: Maybe(string) = {}, fro
 	// x  = ()  ->  ()
 	// x  = x   ->  ()
 	if lhs.kind == .None || rhs.kind == .None || atom_equals(lhs, rhs) {
-		return atom_new({kind=.None}, from=from), true
+		return atom_new_none(from=from), true
 	}
 
 	var := var_maybe.? or_return
@@ -955,8 +960,8 @@ fold_atom :: proc (atom: ^^Atom, constrs: ^Constraints, var: string) -> (updated
 			if has_dependency(atom^, get.get.name) {
 				return atom, false
 			}
-			// (123).a  ->  ()
-			return atom_new({kind = .None}, from=from), true
+			// (x = 2).a  ->  (x = 2)
+			return atom_new(atom^, from=from), true
 		}
 	case .Var:
 		// Try substituting the var from constraints
