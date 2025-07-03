@@ -829,11 +829,13 @@ atom_equals_ptr :: proc (a, b: ^Atom) -> bool {
 	return a == b || atom_equals(a^, b^)
 }
 @require_results
-atom_equals :: proc{atom_equals_val, atom_equals_ptr}
+atom_equals :: proc {atom_equals_val, atom_equals_ptr}
 
 // Attempts to resolve a binary operation, returning the result if simplification is possible
 @require_results
-resolve_bin :: proc(op: Atom_Kind, lhs, rhs: ^Atom, var: Maybe(string) = {}, from: ^Atom = nil) -> (^Atom, bool) {
+resolve_bin :: proc (
+	op: Atom_Kind, lhs, rhs: ^Atom, var: Maybe(string) = {}, from: ^Atom = nil,
+) -> (res: ^Atom, ok: bool) {
 	switch op {
 	case .Add: return atom_add_if_possible(lhs, rhs, from=from)
 	case .Mul: return atom_mul_if_possible(lhs, rhs, from=from)
@@ -842,15 +844,25 @@ resolve_bin :: proc(op: Atom_Kind, lhs, rhs: ^Atom, var: Maybe(string) = {}, fro
 	case .Or:  return atom_or_if_possible(lhs, rhs, from=from)
 	case .Eq:  return atom_eq_if_possible(lhs, rhs, var, from=from)
 	case .And:
-		//   () & x  ->  x
-		if lhs.kind == .None {
-			return atom_new(rhs^, from=from), true
-		} // x & ()  ->  x
-		else if rhs.kind == .None {
-			return atom_new(lhs^, from=from), true
-		} // x & x  ->  x
-		else if atom_equals(lhs, rhs) {
-			return atom_new(lhs^, from=from), true
+		// () & x  ->  x
+		if lhs.kind == .None do return atom_new(rhs^, from=from), true
+		// x & ()  ->  x
+		if rhs.kind == .None do return atom_new(lhs^, from=from), true
+		// x & x  ->  x
+		if atom_equals(lhs, rhs) do return atom_new(lhs^, from=from), true
+		// (x = y) & (x = z)  ->  x = y & z
+		if atom_is_bin(lhs^) && lhs.kind == rhs.kind {
+			for l in ([][2]^Atom{{lhs.lhs, lhs.rhs}, {lhs.rhs, lhs.lhs}}) {
+				for r in ([][2]^Atom{{rhs.lhs, rhs.rhs}, {rhs.rhs, rhs.lhs}}) {
+					if atom_equals(l.x, r.x) {
+						return atom_new_bin(lhs.kind,
+							l.x,
+							atom_new_and(l.y, r.y),
+							from=from,
+						), true
+					}
+				}
+			}
 		}
 	case .Get, .None, .Int, .Float, .Str, .Var:
 		unreachable()
