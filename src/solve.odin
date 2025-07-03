@@ -135,9 +135,7 @@ atom_num_equals_const :: proc (atom: Atom, $N: int) -> bool {
 @require_results
 atom_add_if_possible :: proc (a, b: ^Atom, from: ^Atom = nil) -> (res: ^Atom, ok: bool)
 {
-	res, ok = distribute_over(.Or, .Add, a, b, from=from)
-	if ok do return
-	res, ok = distribute_over(.And, .Add, b, a, from=from)
+	res, ok = distribute_over(.Add, a, b, from=from)
 	if ok do return
 	
 	switch ([2]Atom_Kind{a.kind, b.kind}) {
@@ -249,12 +247,8 @@ atom_sub :: proc (lhs, rhs: ^Atom, from: ^Atom = nil, loc := #caller_location) -
 @require_results
 atom_mul_if_possible :: proc (a, b: ^Atom, from: ^Atom = nil) -> (res: ^Atom, ok: bool)
 {
-	if res, ok = distribute_over(.Or, .Mul, a, b, from=from); ok {
-		return res, true
-	}
-	if res, ok = distribute_over(.And, .Mul, b, a, from=from); ok {
-		return res, true
-	}
+	res, ok = distribute_over(.Mul, a, b, from=from)
+	if ok do return
 	
 	// 2 * 3  ->  6
 	if a.kind == .Int && b.kind == .Int {
@@ -380,14 +374,10 @@ atom_neg :: proc (atom: ^Atom, from: ^Atom = nil, loc := #caller_location) -> ^A
 }
 
 @require_results
-atom_div_if_possible :: proc (dividened, divisor: ^Atom, from: ^Atom = nil) -> (^Atom, bool)
+atom_div_if_possible :: proc (dividened, divisor: ^Atom, from: ^Atom = nil) -> (res: ^Atom, ok: bool)
 {
-	if res, ok := distribute_over(.Or, .Div, dividened, divisor, from=from); ok {
-		return res, true
-	}
-	if res, ok := distribute_over(.And, .Div, divisor, dividened, from=from); ok {
-		return res, true
-	}
+	res, ok = distribute_over(.Div, dividened, divisor, from=from)
+	if ok do return
 	
 	// 0/x  ->  0
 	if atom_num_equals_zero(dividened^) {
@@ -537,14 +527,10 @@ has_dependency_other_than_var :: proc (atom: Atom, var: string) -> bool {
 }
 
 @require_results
-atom_pow_if_possible :: proc (base, exponent: ^Atom, from: ^Atom = nil) -> (^Atom, bool) {
+atom_pow_if_possible :: proc (base, exponent: ^Atom, from: ^Atom = nil) -> (res: ^Atom, ok: bool) {
 
-	if res, ok := distribute_over(.Or, .Pow, base, exponent, from=from); ok {
-		return res, true
-	}
-	if res, ok := distribute_over(.And, .Pow, exponent, base, from=from); ok {
-		return res, true
-	}
+	res, ok = distribute_over(.Pow, base, exponent, from=from)
+	if ok do return
 
 	// 2^0  ->  1
 	if atom_num_equals_zero(exponent^) {
@@ -592,9 +578,9 @@ atom_pow :: proc {atom_pow_atom, atom_pow_float, atom_pow_int}
 @require_results
 atom_or_if_possible :: proc (lhs, rhs: ^Atom, from: ^Atom = nil) -> (^Atom, bool) {
 	
-	if res, ok := distribute_over(.Or, .Or, lhs, rhs, from=from); ok {
-		return res, true
-	}
+	// if res, ok := distribute_over(.Or, .Or, lhs, rhs, from=from); ok {
+	// 	return res, true
+	// }
 
 	// (a = b) | (a = c)  ->  a = (b | c)
 	fold_eq: if lhs.kind == .Eq && rhs.kind == .Eq {
@@ -618,43 +604,36 @@ atom_or :: proc (a, b: ^Atom, from: ^Atom = nil, loc := #caller_location) -> ^At
 }
 
 @require_results
-distribute_over :: proc (over_op: Atom_Kind, op: Atom_Kind, a, b: ^Atom, var: Maybe(string) = {}, from: ^Atom = nil) -> (^Atom, bool)
+distribute_over :: proc (
+	op: Atom_Kind, a, b: ^Atom, var: Maybe(string) = {}, from: ^Atom = nil,
+) -> (res: ^Atom, ok: bool)
 {
-	// If 'a' is an or expression: (x | y) op b -> (x op b) | (y op b)
-	if a.kind == over_op {
-		lhs_result, lhs_simplified := resolve_bin(op, a.lhs, b, var, from=from)
-		rhs_result, rhs_simplified := resolve_bin(op, a.rhs, b, var, from=from)
-		
-		if lhs_simplified || rhs_simplified {
-			if !lhs_simplified {
-				lhs_result = atom_new_bin(op, a.lhs, b, from)
+	res, ok = visit_side(op, a, b, var, from=from)
+	if ok do return
+	res, ok = visit_side(op, b, a, var, from=from)
+	return
+
+	visit_side :: proc (op: Atom_Kind, a, b: ^Atom, var: Maybe(string), from: ^Atom) -> (^Atom, bool)
+	{
+		if (a.kind == .And || a.kind == .Or) {
+			lhs_result, lhs_simplified := resolve_bin(op, a.lhs, b, var, from=from)
+			rhs_result, rhs_simplified := resolve_bin(op, a.rhs, b, var, from=from)
+			
+			if lhs_simplified || rhs_simplified {
+				if !lhs_simplified {
+					lhs_result = atom_new_bin(op, a.lhs, b, from)
+				}
+				if !rhs_simplified {
+					rhs_result = atom_new_bin(op, a.rhs, b, from)
+				}
+				return atom_new_bin(a.kind, lhs_result, rhs_result, from=from), true
 			}
-			if !rhs_simplified {
-				rhs_result = atom_new_bin(op, a.rhs, b, from)
-			}
-			return atom_new_bin(over_op, lhs_result, rhs_result, from=from), true
 		}
+		return nil, false
 	}
-	// If 'b' is an or expression: a op (x | y) -> (a op x) | (a op y)
-	if b.kind == over_op {
-		lhs_result, lhs_simplified := resolve_bin(op, a, b.lhs, var, from=from)
-		rhs_result, rhs_simplified := resolve_bin(op, a, b.rhs, var, from=from)
-		
-		if lhs_simplified || rhs_simplified {
-			if !lhs_simplified {
-				lhs_result = atom_new_bin(op, a, b.lhs, from)
-			}
-			if !rhs_simplified {
-				rhs_result = atom_new_bin(op, a, b.rhs, from)
-			}
-			return atom_new_bin(over_op, lhs_result, rhs_result, from=from), true
-		}
-	}
-	
-	return nil, false
 }
 
-atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var_maybe: Maybe(string) = {}, from: ^Atom = nil) -> (eq: ^Atom, updated: bool)
+atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var_maybe: Maybe(string) = {}, from: ^Atom = nil) -> (res: ^Atom, updated: bool)
 {
 	// () = x   ->  ()
 	// x  = ()  ->  ()
@@ -665,14 +644,10 @@ atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var_maybe: Maybe(string) = {}, fro
 
 	var := var_maybe.? or_return
 
-	if res, ok := distribute_over(.Or, .Eq, lhs, rhs, from=from); ok {
-		return res, true
-	}
-	if res, ok := distribute_over(.And, .Eq, lhs, rhs, from=from); ok {
-		return res, true
-	}
+	res, updated = distribute_over(.Eq, lhs, rhs, from=from)
+	if updated do return
 
-	eq = from
+	res = from
 	lhs, rhs := lhs, rhs
 
 	/*
@@ -809,7 +784,7 @@ atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var_maybe: Maybe(string) = {}, fro
 	}
 
 	if updated {
-		eq = atom_new_eq(lhs, rhs, from=from)
+		res = atom_new_eq(lhs, rhs, from=from)
 	}
 
 	return
