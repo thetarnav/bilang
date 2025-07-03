@@ -147,7 +147,7 @@ solve_test_case :: proc(t: ^test.T, input, expected: string) {
 	solve_test_case(t,
 		"(n * 2 + 10) / (n + 1) = 2 * x\n"+
 		"x * 2 = 3\n",
-		"n = 7.0\n"+
+		"n = 7.0 & (1=1.0)\n"+
 		"x = 1.5\n",
 	)
 
@@ -170,8 +170,8 @@ solve_test_case :: proc(t: ^test.T, input, expected: string) {
 		// "b = 0\n",
 		// "a-(a|b = 0).a = 0\n"+
 		// "b-(a|b = 0).b = 0\n",
-		"a | a-() = 0\n"+
-		"b | b-() = 0\n",
+		"a = 0 | (b=0)\n"+
+		"b = 0 | (a=0)\n",
 		// TODO: this is not true, it's EITHER a = 0 OR b = 0
 	)
 
@@ -218,13 +218,13 @@ solve_test_case :: proc(t: ^test.T, input, expected: string) {
 
 	solve_test_case(t,
 		"(x^2 + 12) * (x + 1) = 4",
-		"x-((x^3 + x^2) + 12*x = -8).x = 0\n",
+		"x = ((x^3 + x^2) + 12*x = -8).x\n",
 		// "x^3 + x^2 + 12*x = -8\n",
 	)
 
 	solve_test_case(t,
 		"x^3 = 1 + x",
-		"x-(x^3 - x = 1).x = 0\n",
+		"x = (x^3 - x = 1).x\n",
 		// "x = 1.324717957244746\n"
 	)
 

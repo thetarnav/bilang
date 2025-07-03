@@ -506,7 +506,7 @@ has_dependency :: proc (atom: Atom, var: string) -> bool {
 	switch (atom.kind) {
 	case .Var: return atom.var == var
 	case .Int, .Float, .Str, .None: return false
-	case .Get: return atom.get.name == var || has_dependency(atom.get.atom^, var)
+	case .Get: return atom.get.name != var && has_dependency(atom.get.atom^, var)
 	case .Add, .Div, .Mul, .Pow, .Or, .And, .Eq:
 		return has_dependency(atom.lhs^, var) ||
 		       has_dependency(atom.rhs^, var)
