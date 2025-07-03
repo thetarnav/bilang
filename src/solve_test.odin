@@ -218,13 +218,13 @@ solve_test_case :: proc(t: ^test.T, input, expected: string) {
 
 	solve_test_case(t,
 		"(x^2 + 12) * (x + 1) = 4",
-		"x = ((x^3 + x^2) + 12*x = -8).x\n",
+		"(x^3 + x^2) + 12*x = -8\n",
 		// "x^3 + x^2 + 12*x = -8\n",
 	)
 
 	solve_test_case(t,
 		"x^3 = 1 + x",
-		"x = (x^3 - x = 1).x\n",
+		"x^3 - x = 1\n",
 		// "x = 1.324717957244746\n"
 	)
 

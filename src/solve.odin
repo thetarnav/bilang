@@ -637,6 +637,15 @@ atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var_maybe: Maybe(string) = {}, fro
 		return atom_new_none(from=from), true
 	}
 
+	// (y).x = x  ->  y
+	if lhs.kind == .Get && atom_val_equals(rhs^, lhs.get.name) {
+		return atom_new(lhs.get.atom^, from=from), true
+	}
+	// x = (y).x  ->  y
+	if rhs.kind == .Get && atom_val_equals(lhs^, rhs.get.name) {
+		return atom_new(rhs.get.atom^, from=from), true
+	}
+
 	var := var_maybe.? or_return
 
 	res, updated = distribute_over(.Eq, lhs, rhs, from=from)
