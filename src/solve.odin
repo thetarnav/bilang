@@ -660,6 +660,10 @@ atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var_maybe: Maybe(string) = {}, fro
 	if lhs.kind == .None || rhs.kind == .None || atom_equals(lhs, rhs) {
 		return atom_new_none(from=from), true
 	}
+	// 1 = 2  ->  never
+	if !has_dependencies(lhs^) && !has_dependencies(rhs^) && !atom_equals(lhs, rhs) {
+		return atom_new_never(from=from), true
+	}
 
 	// (y).x = x  ->  y
 	if lhs.kind == .Get && atom_val_equals(rhs^, lhs.get.name) {
@@ -871,6 +875,10 @@ resolve_bin :: proc (
 		if rhs.kind == .None do return atom_new(lhs^, from=from), true
 		// x & x  ->  x
 		if atom_equals(lhs, rhs) do return atom_new(lhs^, from=from), true
+		// 1 & 2  ->  never
+		if !has_dependencies(lhs^) && !has_dependencies(rhs^) && !atom_equals(lhs, rhs) {
+			return atom_new_never(from=from), true
+		}
 		// (x = y) & (x = z)  ->  x = y & z
 		if atom_is_bin(lhs^) && lhs.kind == rhs.kind {
 			for l in ([][2]^Atom{{lhs.lhs, lhs.rhs}, {lhs.rhs, lhs.lhs}}) {
