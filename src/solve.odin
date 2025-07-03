@@ -538,7 +538,11 @@ atom_pow_if_possible :: proc (base, exponent: ^Atom, from: ^Atom = nil) -> (res:
 	}
 	// 2^1  ->  2
 	if atom_num_equals_one(exponent^) {
-		return base, true
+		return atom_new(base^, from=from), true
+	}
+	// 0^2  ->  0
+	if atom_num_equals_zero(base^) {
+		return atom_new(base^, from=from), true
 	}
 
 	// 2^3  ->  8
