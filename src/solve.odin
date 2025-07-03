@@ -648,20 +648,24 @@ atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var_maybe: Maybe(string) = {}, fro
 	/*
 	move addends if they do(n't) depend on var
 	*/
-	// 1+2 = x  ->  x = 1+2
-	if !has_dependency(lhs^, var) && has_dependency(rhs^, var) {
-		lhs, rhs = rhs, lhs
-		updated = true
-	}
-	// 1+2+x = y  ->  x = y-1-2
-	if res, ok := move_addends(lhs, &rhs, var, false); ok {
-		lhs = res
-		updated = true
-	}
-	// x = 1+2-x  ->  x+x = 1+2
-	if res, ok := move_addends(rhs, &lhs, var, true); ok {
-		rhs = res
-		updated = true
+	lhs_has_var := has_dependency(lhs^, var)
+	rhs_has_var := has_dependency(rhs^, var)
+	if lhs_has_var || rhs_has_var {
+		// 1+2 = x  ->  x = 1+2
+		if !lhs_has_var && rhs_has_var {
+			lhs, rhs = rhs, lhs
+			updated = true
+		}
+		// 1+2+x = y  ->  x = y-1-2
+		if res, ok := move_addends(lhs, &rhs, var, false); ok {
+			lhs = res
+			updated = true
+		}
+		// x = 1+2-x  ->  x+x = 1+2
+		if res, ok := move_addends(rhs, &lhs, var, true); ok {
+			rhs = res
+			updated = true
+		}
 	}
 
 	move_addends :: proc (atom: ^Atom, dst: ^^Atom, var: string, cond: bool) -> (res: ^Atom, ok: bool)
