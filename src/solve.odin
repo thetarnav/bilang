@@ -4,6 +4,7 @@ import "base:intrinsics"
 
 import "core:math"
 import "core:strings"
+import "core:fmt"
 
 import "../utils"
 
@@ -30,6 +31,7 @@ Atom :: struct {
 
 Atom_Kind :: enum u8 {
 	None,
+	Never,
 	Int,
 	Float,
 	Str,
@@ -65,7 +67,7 @@ atom_kind_to_token_kind :: proc (kind: Atom_Kind) -> Token_Kind {
 	case .Or:    return .Or
 	case .And:   return .And
 	case .Eq:    return .Eq
-	case .Get, .None: fallthrough
+	case .Get, .None, .Never: fallthrough
 	case:        return .Invalid
 	}
 }
@@ -81,6 +83,7 @@ atom_new :: proc (atom: Atom, from: ^Atom = nil, loc := #caller_location) -> ^At
 }
 
 atom_none        := Atom{kind=.None}
+atom_never       := Atom{kind=.Never}
 atom_int_zero    := Atom{kind=.Int, int= 0}
 atom_int_one     := Atom{kind=.Int, int= 1}
 atom_int_neg_one := Atom{kind=.Int, int=-1}
@@ -88,6 +91,10 @@ atom_int_neg_one := Atom{kind=.Int, int=-1}
 @require_results
 atom_new_none :: proc (from: ^Atom = nil, loc := #caller_location) -> ^Atom {
 	return atom_new(atom_none, from=from, loc=loc) if from != nil else &atom_none
+}
+@require_results
+atom_new_never :: proc (from: ^Atom = nil, loc := #caller_location) -> ^Atom {
+	return atom_new(atom_never, from=from, loc=loc) if from != nil else &atom_never
 }
 @require_results
 atom_new_int :: proc (val: int, from: ^Atom = nil, loc := #caller_location) -> ^Atom {
@@ -202,6 +209,9 @@ atom_add_if_possible :: proc (a, b: ^Atom, from: ^Atom = nil) -> (res: ^Atom, ok
 	visit_b :: proc (a, b: ^Atom) -> (res: ^Atom, ok: bool)
 	{
 		switch b.kind {
+		case .Never, .None, .Eq:
+			// TODO: store reason
+			return atom_new_never(), true
 		case .Int:
 			// x + 0  ->  x
 			if b.int == 0 {
@@ -226,7 +236,7 @@ atom_add_if_possible :: proc (a, b: ^Atom, from: ^Atom = nil) -> (res: ^Atom, ok
 			if new_rhs, ok := atom_add_if_possible(b.rhs, a, b); ok {
 				return atom_new_add(b.lhs, new_rhs, b), true
 			}
-		case .Mul, .Pow, .Var, .Str, .Or, .Eq, .And, .Get, .None:
+		case .Mul, .Pow, .Var, .Str, .Or, .And, .Get:
 		}
 		return
 	}
@@ -492,37 +502,47 @@ atom_flip :: proc (atom: ^Atom, from: ^Atom = nil) -> ^Atom {
 @require_results
 has_dependencies :: proc (atom: Atom) -> bool {
 	switch (atom.kind) {
-	case .Var: return true
-	case .Int, .Float, .Str, .None: return false
-	case .Get: return true // ? Get always has dependencies
+	case .Int, .Float, .Str, .None, .Never:
+		return false
+	case .Get, .Var:
+		return true // ? Get always has dependencies
 	case .Add, .Div, .Mul, .Pow, .Or, .And, .Eq:
 		return has_dependencies(atom.lhs^) ||
 		       has_dependencies(atom.rhs^)
-	case: return false
+	case:
+		return false
 	}
 }
 @require_results
 has_dependency :: proc (atom: Atom, var: string) -> bool {
 	switch (atom.kind) {
-	case .Var: return atom.var == var
-	case .Int, .Float, .Str, .None: return false
-	case .Get: return atom.get.name != var && has_dependency(atom.get.atom^, var)
+	case .Var:
+		return atom.var == var
+	case .Int, .Float, .Str, .None, .Never:
+		return false
+	case .Get:
+		return atom.get.name != var && has_dependency(atom.get.atom^, var)
 	case .Add, .Div, .Mul, .Pow, .Or, .And, .Eq:
 		return has_dependency(atom.lhs^, var) ||
 		       has_dependency(atom.rhs^, var)
-	case: return false
+	case:
+		return false
 	}
 }
 @require_results
 has_dependency_other_than_var :: proc (atom: Atom, var: string) -> bool {
 	switch (atom.kind) {
-	case .Var: return atom.var != var
-	case .Int, .Float, .Str, .None: return false
-	case .Get: return atom.get.name != var && has_dependency_other_than_var(atom.get.atom^, var)
+	case .Var:
+		return atom.var != var
+	case .Int, .Float, .Str, .None, .Never:
+		return false
+	case .Get:
+		return atom.get.name != var && has_dependency_other_than_var(atom.get.atom^, var)
 	case .Add, .Div, .Mul, .Pow, .Or, .And, .Eq:
 		return has_dependency_other_than_var(atom.lhs^, var) ||
 		       has_dependency_other_than_var(atom.rhs^, var)
-	case: return false
+	case:
+		return false
 	}
 }
 
@@ -787,7 +807,7 @@ atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var_maybe: Maybe(string) = {}, fro
 				} else if rhs, ok := extract_var_if_possible(atom.rhs, var); ok {
 					return atom_mul(atom.lhs, rhs), true
 				}
-			case .Pow, .Int, .Float, .Str, .Or, .Eq, .And, .Get, .None:
+			case .Pow, .Int, .Float, .Str, .Or, .Eq, .And, .Get, .None, .Never:
 				// skip
 			}
 
@@ -809,6 +829,7 @@ atom_equals_val :: proc (a, b: Atom) -> bool
 	if a.kind == b.kind {
 		switch a.kind {
 		case .None:  return true
+		case .Never: return true
 		case .Int:   return a.int == b.int
 		case .Float: return a.float == b.float
 		case .Str:   return a.str == b.str
@@ -864,7 +885,7 @@ resolve_bin :: proc (
 				}
 			}
 		}
-	case .Get, .None, .Int, .Float, .Str, .Var:
+	case .Get, .None, .Int, .Float, .Str, .Var, .Never:
 		unreachable()
 	}
 	return nil, false
@@ -1005,7 +1026,7 @@ fold_atom :: proc (atom: ^^Atom, constrs: ^Constraints, var: string) -> (updated
 			       !has_dependency(atom^, var) &&
 			       !has_dependency(atom^, constr_var)
 		}
-	case .Int, .Float, .Str, .None:
+	case .Int, .Float, .Str, .None, .Never:
 		// constants and vars are not foldable
 	}
 
@@ -1095,9 +1116,8 @@ constraints_from_expr :: proc (expr: Expr, allocator := context.allocator) -> (c
 					atom_new_var(atom.var),
 					atom_new_get(root_atom, atom.var))
 			}
-		case .None: unimplemented("none expressions are not supported")
-		case .Get:
-			unimplemented("get expressions are not supported")
+		case .Never, .None, .Get:
+			unimplemented(fmt.tprintfln("%o expressions are not supported", atom.kind))
 		case .Add, .Mul, .Div, .Pow, .Eq, .Or, .And:
 			_visit(atom.lhs, root_atom, constrs)
 			_visit(atom.rhs, root_atom, constrs)

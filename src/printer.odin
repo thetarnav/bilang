@@ -289,6 +289,10 @@ write_atom :: proc (w: io.Writer, atom: Atom, parent_kind: Atom_Kind = .None, op
 		write_highlight(w, .Punct, opts)
 		write_string(w, "()")
 		write_highlight(w, .Reset, opts)
+	case .Never:
+		write_highlight(w, .Punct, opts)
+		write_string(w, "!()")
+		write_highlight(w, .Reset, opts)
 	case .Int:
 		write_int(w, atom.int, opts)
 	case .Float:
