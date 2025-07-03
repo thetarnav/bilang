@@ -140,6 +140,23 @@ write_paren :: proc (w: io.Writer, t: Token_Kind, opts: Writer_Options = {})
 	}
 }
 
+// Helper to determine if parentheses are needed for a child expression
+@(private)
+_needs_parens :: proc (child_op, parent_op: Token_Kind, is_right_operand: bool) -> bool {
+
+	child_prec  := token_kind_precedence(child_op)
+	parent_prec := token_kind_precedence(parent_op)
+	
+	if child_prec < parent_prec do return true
+	if child_prec > parent_prec do return false
+	
+	// right-associative don't need parens on the right
+	// left-associative don't need parens on the left
+	return token_kind_is_right_associative(parent_op) \
+		? !is_right_operand \
+		: is_right_operand
+}
+
 
 /*
 
@@ -269,7 +286,7 @@ write_constraints :: proc (w: io.Writer, constrs: Constraints, opts: Writer_Opti
 {
 	for var in constrs.order {
 		atom := constrs.vars[var]
-		write_atom(w, atom^, .None, opts)
+		write_atom(w, atom^, .None, opts=opts)
 		write_newline(w)
 	}
 }
@@ -278,9 +295,9 @@ print_atom :: proc (atom: Atom, opts: Writer_Options = {}, fd := os.stdout)
 {
 	w: Printer_Writer
 	_scope_handle_writer(&w, fd)
-	write_atom(w.w, atom, .None, opts)
+	write_atom(w.w, atom, .None, opts=opts)
 }
-write_atom :: proc (w: io.Writer, atom: Atom, parent_kind: Atom_Kind = .None, opts: Writer_Options = {})
+write_atom :: proc (w: io.Writer, atom: Atom, parent_kind: Atom_Kind = .None, is_right_operand: bool = false, opts: Writer_Options = {})
 {
 	context.allocator = context.temp_allocator
 
@@ -306,7 +323,7 @@ write_atom :: proc (w: io.Writer, atom: Atom, parent_kind: Atom_Kind = .None, op
 	case .Get:
 		write_punct_token(w, .Paren_L, opts)
 		if atom.get.atom != nil {
-			write_atom(w, atom.get.atom^, .Get, opts)
+			write_atom(w, atom.get.atom^, .Get, opts=opts)
 		}
 		write_punct_token(w, .Paren_R, opts)
 		write_punct(w, ".", opts)
@@ -325,7 +342,7 @@ write_atom :: proc (w: io.Writer, atom: Atom, parent_kind: Atom_Kind = .None, op
 			}
 
 			write_operator_token(w, .Sub, opts)
-			write_atom(w, val^, .Mul, opts)
+			write_atom(w, val^, .Mul, opts=opts)
 			return
 		}
 
@@ -360,7 +377,10 @@ write_atom :: proc (w: io.Writer, atom: Atom, parent_kind: Atom_Kind = .None, op
 		         atom_is_bin(lhs^) ||
 		         atom_is_bin(rhs^)
 
-		parens := opts.parens || token_kind_precedence(op) <= token_kind_precedence(atom_kind_to_token_kind(parent_kind))
+		current_op := atom_kind_to_token_kind(atom.kind)
+		parent_op := atom_kind_to_token_kind(parent_kind)
+		
+		parens := opts.parens || (parent_kind != .None && _needs_parens(current_op, parent_op, is_right_operand))
 
 		opts := opts
 		opts.parens = opts.parens || parens
@@ -369,11 +389,11 @@ write_atom :: proc (w: io.Writer, atom: Atom, parent_kind: Atom_Kind = .None, op
 		child_opts.parens = false
 
 		write_paren(w, .Paren_L, opts)
-		write_atom(w, lhs^, atom.kind, child_opts)
+		write_atom(w, lhs^, atom.kind, false, child_opts)  // left operand
 		if space do write_space(w)
 		write_operator_token(w, op, opts)
 		if space do write_space(w)
-		write_atom(w, rhs^, atom.kind, child_opts)
+		write_atom(w, rhs^, atom.kind, true, child_opts)   // right operand
 		write_paren(w, .Paren_R, opts)
 	}
 }
@@ -408,7 +428,7 @@ write_atom_transformations :: proc (w: io.Writer, atom: Atom, opts: Writer_Optio
 	}
 
 	#reverse for step, i in transformations {
-		write_atom(w, step, .None, opts)
+		write_atom(w, step, .None, opts=opts)
 		
 		if i > 0 {
 			write_highlight(w, .Punct, opts)

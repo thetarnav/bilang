@@ -50,6 +50,11 @@ precedence_table := #partial [Token_Kind]int{
 	.Pow = 6,
 }
 
+tokens_right_associative := #partial [Token_Kind]bool{
+	.Pow = true, // ^ is right-associative
+	// +, -, *, /, etc. are left-associative
+}
+
 Parse_Error :: union {
 	Allocator_Error,
 	Unexpected_Token_Error,
@@ -74,6 +79,9 @@ Parser :: struct {
 
 @require_results token_kind_precedence :: proc (token_kind: Token_Kind) -> int {return precedence_table[token_kind]}
 @require_results token_precedence      :: proc (token: Token) -> int {return precedence_table[token.kind]}
+
+@require_results token_kind_is_right_associative :: proc (kind: Token_Kind) -> bool {return tokens_right_associative[kind]}
+@require_results token_is_right_associative      :: proc (token: Token) -> bool {return tokens_right_associative[token.kind]}
 
 @require_results
 expr_single_new :: proc (token: Token, allocator := context.allocator, loc := #caller_location) ->
