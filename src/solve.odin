@@ -608,29 +608,24 @@ distribute_over :: proc (
 	op: Atom_Kind, a, b: ^Atom, var: Maybe(string) = {}, from: ^Atom = nil,
 ) -> (res: ^Atom, ok: bool)
 {
-	res, ok = visit_side(op, a, b, var, from=from)
-	if ok do return
-	res, ok = visit_side(op, b, a, var, from=from)
-	return
+	// If 'a' is an or expression: (x | y) op b -> (x op b) | (y op b)
+	for ab in ([][2]^Atom{{a, b}, {b, a}}) {
+		a, b := ab[0], ab[1]
 
-	visit_side :: proc (op: Atom_Kind, a, b: ^Atom, var: Maybe(string), from: ^Atom) -> (^Atom, bool)
-	{
 		if (a.kind == .And || a.kind == .Or) {
-			lhs_result, lhs_simplified := resolve_bin(op, a.lhs, b, var, from=from)
-			rhs_result, rhs_simplified := resolve_bin(op, a.rhs, b, var, from=from)
-			
-			if lhs_simplified || rhs_simplified {
-				if !lhs_simplified {
-					lhs_result = atom_new_bin(op, a.lhs, b, from)
-				}
-				if !rhs_simplified {
-					rhs_result = atom_new_bin(op, a.rhs, b, from)
-				}
-				return atom_new_bin(a.kind, lhs_result, rhs_result, from=from), true
+			lhs_res, lhs_ok := resolve_bin(op, a.lhs, b, var, from=from)
+			rhs_res, rhs_ok := resolve_bin(op, a.rhs, b, var, from=from)
+
+			if lhs_ok || rhs_ok {
+				return atom_new_bin(a.kind,
+					lhs_res if lhs_ok else atom_new_bin(op, a.lhs, b, from=from),
+					rhs_res if rhs_ok else atom_new_bin(op, a.rhs, b, from=from),
+					from=from,
+				), true
 			}
 		}
-		return nil, false
 	}
+	return
 }
 
 atom_eq_if_possible :: proc (lhs, rhs: ^Atom, var_maybe: Maybe(string) = {}, from: ^Atom = nil) -> (res: ^Atom, updated: bool)
