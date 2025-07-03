@@ -862,7 +862,7 @@ fold_atom :: proc (atom: ^^Atom, constrs: ^Constraints, var: string) -> (updated
 		rhs_updated := fold_atom(&rhs, constrs, var)
 
 		res, bin_updated := resolve_bin(atom^.kind, lhs, rhs, var, from=atom^)
-	
+
 		if bin_updated {
 			// If the bin was updated, then we can use it
 			atom^ = res
@@ -881,7 +881,7 @@ fold_atom :: proc (atom: ^^Atom, constrs: ^Constraints, var: string) -> (updated
 		} else {
 			// Try folding the inner atom
 			get_atom := atom^.get.atom
-			if fold_atom(&get_atom, constrs, var) {
+			if fold_atom(&get_atom, constrs, atom^.get.name) {
 				atom^ = atom_new_get(get_atom, atom^.get.name, from=atom^)
 				updated = true
 			}
