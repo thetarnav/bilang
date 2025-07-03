@@ -5,13 +5,35 @@
             "label": "build-test",
             "type": "shell",
             "command": "make",
-            "args": [
-                "build-test"
-            ],
+            "args": ["build-test"],
             "group": "build",
             "presentation": {
                 "echo": true,
                 "reveal": "silent",
+                "focus": false,
+                "panel": "shared",
+            },
+            "problemMatcher": {
+                "owner": "odin",
+                "fileLocation": "absolute",
+                "pattern": {
+                    "regexp": "^(.+):(\\d+):(\\d+):\\s+(Error|Warning):\\s+(.+)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            }
+        },
+        {
+            "label": "test",
+            "type": "shell",
+            "command": "make",
+            "args": ["test"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
                 "focus": false,
                 "panel": "shared",
             },
